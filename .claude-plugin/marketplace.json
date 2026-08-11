@@ -1,0 +1,14 @@
+{
+  "name": "tracecat",
+  "owner": {
+    "name": "Tracecat"
+  },
+  "description": "Official Tracecat skills and MCP integration for coding agents.",
+  "plugins": [
+    {
+      "name": "tracecat",
+      "source": "./plugins/tracecat",
+      "description": "Operate Tracecat safely through its MCP server and platform workflows."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "tracecat",
+  "version": "0.1.0",
+  "description": "Operate Tracecat safely through its MCP server and platform workflows.",
+  "author": {
+    "name": "Tracecat"
+  },
+  "homepage": "https://docs.tracecat.com/automations/tracecat-mcp",
+  "repository": "https://github.com/TracecatHQ/tracecat-plugins"
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Tracecat Skills"
+  short_description: "Upload and update Tracecat skills without base64"
+  default_prompt: "Use $tracecat-manage-skills to upload or update a local skill in Tracecat."

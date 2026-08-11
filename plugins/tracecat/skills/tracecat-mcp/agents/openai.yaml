@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tracecat MCP"
+  short_description: "Connect external agents to the Tracecat platform"
+  default_prompt: "Use $tracecat-mcp to work with Tracecat through its MCP server."

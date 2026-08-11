@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "tracecat",
+  "version": "0.1.0",
+  "description": "Operate Tracecat safely through its MCP server and platform workflows.",
+  "author": {
+    "name": "Tracecat",
+    "url": "https://tracecat.com"
+  },
+  "homepage": "https://docs.tracecat.com/automations/tracecat-mcp",
+  "repository": "https://github.com/TracecatHQ/tracecat-plugins",
+  "keywords": [
+    "tracecat",
+    "security-automation",
+    "mcp",
+    "agent-skills"
+  ]
+}

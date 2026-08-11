@@ -1,0 +1,20 @@
+{
+  "name": "tracecat",
+  "interface": {
+    "displayName": "Tracecat"
+  },
+  "plugins": [
+    {
+      "name": "tracecat",
+      "source": {
+        "source": "local",
+        "path": "./plugins/tracecat"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
