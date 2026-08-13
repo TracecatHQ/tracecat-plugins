@@ -15,6 +15,7 @@ Load the smallest tool family that satisfies the request.
 | Inspect variables or secrets | `list_variables`, `list_secrets_metadata` | Work with metadata only; never request secret values |
 | Configure an agent preset | `get_agent_preset_authoring_context` | Inspect integrations and skills before create/update |
 | Upload or update a local skill | `list_skills` plus `tracecat-manage-skills` | Use staged raw-byte transfer, then publish only if requested |
+| Download or hydrate a local skill | `list_skills` plus `tracecat-manage-skills` | Use the prepared download plan and local verifying helper |
 
 ## Workflow edit selection
 
