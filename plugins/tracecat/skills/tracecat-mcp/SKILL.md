@@ -19,7 +19,7 @@ Use Tracecat's remote MCP server as the control plane. Discover current workspac
 
 - Read [references/platform-concepts.md](references/platform-concepts.md) when the user is unfamiliar with drafts, published versions, registry actions, agent presets, or workspace scoping.
 - Read [references/tool-routing.md](references/tool-routing.md) when selecting tools across workflows, cases, tables, integrations, agents, or skills.
-- Use the `tracecat-manage-skills` skill for uploading or replacing a local skill directory. Its helper prevents the model from generating base64.
+- Use the `tracecat-manage-skills` skill for uploading, replacing, or downloading a local skill directory. Its helper keeps raw file bytes out of model context.
 - When a future domain skill such as `tracecat-automation-best-practices` is installed, use it for that domain's authoring rules while retaining this skill for connection and routing.
 
 ## Operating rules

@@ -1,13 +1,13 @@
 ---
 name: tracecat-manage-skills
-description: Use when creating, uploading, replacing, or updating a local Agent Skill directory in a Tracecat workspace, especially when avoiding inline base64 and preserving the complete file tree through Tracecat MCP.
+description: Use when downloading, creating, uploading, replacing, or updating a local Agent Skill directory through Tracecat MCP without placing file bytes in model context.
 ---
 
 # Manage Tracecat skills
 
-Upload raw local files through short-lived HTTP URLs prepared by Tracecat MCP. The model handles only paths and integrity metadata; the bundled helper streams file bytes directly and emits the exact completion payload.
+Transfer raw files through short-lived HTTP URLs prepared by Tracecat MCP. The model handles only paths and integrity metadata; the bundled helper streams and verifies bytes locally.
 
-## Required workflow
+## Upload or update a skill
 
 1. Resolve the target workspace with `list_workspaces`.
 2. Resolve this installed skill's directory and the bundled `scripts/upload_skill_files.py` path.
@@ -34,11 +34,26 @@ Upload raw local files through short-lived HTTP URLs prepared by Tracecat MCP. T
 
 The completion call replaces the entire draft. Files not present in the local directory are deleted, and `base_revision` prevents overwriting concurrent edits.
 
+## Download a skill
+
+1. Resolve the workspace and exact `skill_id` with `list_skills`.
+2. Call `prepare_skill_download` with the workspace and skill IDs.
+3. Write the exact response to a temporary JSON file with mode `0600`. Do not print or log its signed URLs.
+4. Hydrate a new local directory:
+
+   ```bash
+   python3 <this-skill-dir>/scripts/upload_skill_files.py download \
+     <new-local-skill-dir> --plan <temporary-plan.json> --delete-plan
+   ```
+
+The output directory must not exist. The helper downloads into a private temporary directory, verifies every declared size and SHA-256 digest, and exposes the directory only after the complete tree succeeds.
+
 ## Hard rules
 
 - Do not call legacy `upload_skill` or `update_skill` when the helper and staged tools are available.
 - Never generate, paste, or ask the user to paste base64 file contents.
-- Never add Tracecat OAuth or PAT credentials to the helper. Authentication remains in the MCP client; the helper receives only short-lived signed upload URLs.
+- Never fetch signed download URLs into model context; pass the complete plan to the helper.
+- Never add Tracecat OAuth or PAT credentials to the helper. Authentication remains in the MCP client; the helper receives only short-lived signed transfer URLs.
 - Reject symlinked files and directories. Do not upload content outside the selected skill root.
 - If the local directory changes after preparation, regenerate metadata and prepare a new plan.
 - If URLs expire or any PUT fails, discard the plan and call `prepare_skill_upload` again.

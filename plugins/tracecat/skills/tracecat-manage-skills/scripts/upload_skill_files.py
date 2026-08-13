@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare metadata and stream local skill files to Tracecat upload URLs."""
+"""Transfer local skill directories through Tracecat's signed HTTP plans."""
 
 from __future__ import annotations
 
@@ -10,9 +10,11 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import ssl
 import stat
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -38,7 +40,7 @@ _CONTENT_TYPES = {
 
 
 class SkillUploadError(RuntimeError):
-    """Safe user-facing failure that never includes a signed upload URL."""
+    """Safe user-facing failure that never includes a signed transfer URL."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,13 +88,36 @@ class UploadPlan:
     files: tuple[PreparedUpload, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedDownload:
+    """One server-prepared raw-byte download."""
+
+    path: str
+    sha256: str
+    size_bytes: int
+    content_type: str
+    download_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadPlan:
+    """Tracecat MCP response needed to hydrate a complete skill draft."""
+
+    workspace_id: str
+    skill_id: str
+    skill_name: str
+    draft_revision: int
+    files: tuple[PreparedDownload, ...]
+
+
 class CliArguments(argparse.Namespace):
-    """Typed argparse result shared by both helper subcommands."""
+    """Typed argparse result shared by the helper subcommands."""
 
     def __init__(self) -> None:
         super().__init__()
         self.command: str = ""
         self.root: Path = Path()
+        self.output: Path = Path()
         self.plan: str = ""
         self.timeout: float = 60.0
         self.delete_plan: bool = False
@@ -275,6 +300,25 @@ def _parse_prepared_upload(value: object, index: int) -> PreparedUpload:
     )
 
 
+def _parse_prepared_download(value: object, index: int) -> PreparedDownload:
+    label = f"plan.files[{index}]"
+    mapping = _as_mapping(value, label)
+    path = _validated_plan_path(_required_string(mapping, "path", label), label)
+    sha256 = _required_string(mapping, "sha256", label).lower()
+    if _SHA256_PATTERN.fullmatch(sha256) is None:
+        raise SkillUploadError(f"{label}.sha256 must contain 64 hexadecimal characters")
+    size_bytes = _required_integer(mapping, "size_bytes", label)
+    if size_bytes < 0:
+        raise SkillUploadError(f"{label}.size_bytes must be non-negative")
+    return PreparedDownload(
+        path=path,
+        sha256=sha256,
+        size_bytes=size_bytes,
+        content_type=_required_string(mapping, "content_type", label),
+        download_url=_required_string(mapping, "download_url", label),
+    )
+
+
 def _load_json(file_handle: TextIO, label: str) -> object:
     try:
         return cast(object, json.load(file_handle))
@@ -320,6 +364,45 @@ def load_upload_plan(plan_value: str | Path) -> UploadPlan:
     )
 
 
+def load_download_plan(plan_value: str | Path) -> DownloadPlan:
+    """Load and validate a prepare_skill_download response."""
+
+    if str(plan_value) == "-":
+        raw_plan = _load_json(sys.stdin, "stdin download plan")
+    else:
+        plan_path = Path(plan_value).expanduser()
+        try:
+            with plan_path.open(encoding="utf-8") as file_handle:
+                raw_plan = _load_json(file_handle, f"download plan {plan_path}")
+        except OSError as exc:
+            raise SkillUploadError(f"cannot read download plan: {plan_path}") from exc
+
+    mapping = _as_mapping(raw_plan, "plan")
+    raw_files = _as_list(mapping.get("files"), "plan.files")
+    if not raw_files:
+        raise SkillUploadError("plan.files must contain at least one download")
+    files = tuple(
+        _parse_prepared_download(raw_file, index)
+        for index, raw_file in enumerate(raw_files)
+    )
+    paths = [file.path for file in files]
+    if len(paths) != len(set(paths)):
+        raise SkillUploadError("plan.files contains duplicate paths")
+    if "SKILL.md" not in paths:
+        raise SkillUploadError("plan.files must include root SKILL.md")
+
+    draft_revision = _required_integer(mapping, "draft_revision", "plan")
+    if draft_revision < 0:
+        raise SkillUploadError("plan.draft_revision must be non-negative")
+    return DownloadPlan(
+        workspace_id=_required_string(mapping, "workspace_id", "plan"),
+        skill_id=_required_string(mapping, "skill_id", "plan"),
+        skill_name=_required_string(mapping, "skill_name", "plan"),
+        draft_revision=draft_revision,
+        files=files,
+    )
+
+
 def _validated_upload_url(upload: PreparedUpload) -> SplitResult:
     parsed = urlsplit(upload.upload_url)
     if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
@@ -327,6 +410,35 @@ def _validated_upload_url(upload: PreparedUpload) -> SplitResult:
     if parsed.username is not None or parsed.password is not None or parsed.fragment:
         raise SkillUploadError(f"unsafe HTTP upload URL for {upload.path}")
     return parsed
+
+
+def _validated_download_url(download: PreparedDownload) -> SplitResult:
+    parsed = urlsplit(download.download_url)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+        raise SkillUploadError(f"invalid HTTP download URL for {download.path}")
+    if parsed.username is not None or parsed.password is not None or parsed.fragment:
+        raise SkillUploadError(f"unsafe HTTP download URL for {download.path}")
+    return parsed
+
+
+def _http_connection(
+    parsed: SplitResult, *, timeout_seconds: float
+) -> http.client.HTTPConnection:
+    hostname = parsed.hostname
+    if hostname is None:
+        raise SkillUploadError("HTTP transfer URL has no hostname")
+    if parsed.scheme == "https":
+        return http.client.HTTPSConnection(
+            hostname,
+            parsed.port,
+            timeout=timeout_seconds,
+            context=ssl.create_default_context(),
+        )
+    return http.client.HTTPConnection(
+        hostname,
+        parsed.port,
+        timeout=timeout_seconds,
+    )
 
 
 def _content_length_headers(upload: PreparedUpload) -> dict[str, str]:
@@ -351,24 +463,9 @@ def _upload_file(
     timeout_seconds: float,
 ) -> None:
     parsed = _validated_upload_url(upload)
-    hostname = parsed.hostname
-    if hostname is None:
-        raise SkillUploadError(f"invalid HTTP upload URL for {upload.path}")
     target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
     headers = _content_length_headers(upload)
-    if parsed.scheme == "https":
-        connection: http.client.HTTPConnection = http.client.HTTPSConnection(
-            hostname,
-            parsed.port,
-            timeout=timeout_seconds,
-            context=ssl.create_default_context(),
-        )
-    else:
-        connection = http.client.HTTPConnection(
-            hostname,
-            parsed.port,
-            timeout=timeout_seconds,
-        )
+    connection = _http_connection(parsed, timeout_seconds=timeout_seconds)
 
     try:
         with local_file.absolute_path.open("rb") as file_handle:
@@ -385,6 +482,68 @@ def _upload_file(
     except (OSError, http.client.HTTPException, ValueError) as exc:
         raise SkillUploadError(
             f"HTTP upload failed for {upload.path}: {type(exc).__name__}"
+        ) from exc
+    finally:
+        connection.close()
+
+
+def _download_file(
+    download: PreparedDownload,
+    destination: Path,
+    *,
+    timeout_seconds: float,
+) -> None:
+    parsed = _validated_download_url(download)
+    target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    connection = _http_connection(parsed, timeout_seconds=timeout_seconds)
+
+    try:
+        connection.request("GET", target)
+        response = connection.getresponse()
+        if not 200 <= response.status < 300:
+            _ = response.read(1024)
+            response_status = f"{response.status} {response.reason}"
+            raise SkillUploadError(
+                f"HTTP download failed for {download.path}: status {response_status}"
+            )
+
+        content_length = response.getheader("Content-Length")
+        if content_length is not None:
+            try:
+                response_size_bytes = int(content_length)
+            except ValueError as exc:
+                raise SkillUploadError(
+                    f"HTTP download returned invalid Content-Length for {download.path}"
+                ) from exc
+            if response_size_bytes != download.size_bytes:
+                raise SkillUploadError(
+                    f"download size differs from plan for {download.path}"
+                )
+
+        hasher = hashlib.sha256()
+        received_size_bytes = 0
+        with destination.open("xb") as file_handle:
+            while chunk := response.read(_CHUNK_SIZE_BYTES):
+                received_size_bytes += len(chunk)
+                if received_size_bytes > download.size_bytes:
+                    raise SkillUploadError(
+                        f"download exceeds planned size for {download.path}"
+                    )
+                hasher.update(chunk)
+                _ = file_handle.write(chunk)
+        if received_size_bytes != download.size_bytes:
+            raise SkillUploadError(
+                f"download size differs from plan for {download.path}"
+            )
+        if hasher.hexdigest() != download.sha256:
+            raise SkillUploadError(
+                f"download SHA-256 differs from plan for {download.path}"
+            )
+    except SkillUploadError:
+        raise
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        raise SkillUploadError(
+            f"HTTP download failed for {download.path}: {type(exc).__name__}"
         ) from exc
     finally:
         connection.close()
@@ -451,6 +610,69 @@ def upload_from_plan(
     }
 
 
+def download_from_plan(
+    output_value: str | Path,
+    plan_value: str | Path,
+    *,
+    timeout_seconds: float,
+) -> dict[str, object]:
+    """Hydrate and verify a complete skill tree without exposing file bytes."""
+
+    plan = load_download_plan(plan_value)
+    output_input = Path(output_value).expanduser()
+    if output_input.exists():
+        raise SkillUploadError(f"output path already exists: {output_input}")
+    try:
+        output_parent = output_input.parent.resolve(strict=True)
+    except OSError as exc:
+        raise SkillUploadError(
+            f"output parent does not exist: {output_input.parent}"
+        ) from exc
+    if not output_parent.is_dir():
+        raise SkillUploadError(f"output parent is not a directory: {output_parent}")
+    output = output_parent / output_input.name
+
+    try:
+        temporary_root = Path(
+            tempfile.mkdtemp(prefix=f".{output.name}.", dir=output_parent)
+        )
+    except OSError as exc:
+        raise SkillUploadError(
+            f"cannot create temporary directory below: {output_parent}"
+        ) from exc
+    try:
+        for download in plan.files:
+            relative_path = PurePosixPath(download.path)
+            destination = temporary_root.joinpath(*relative_path.parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            _download_file(
+                download,
+                destination,
+                timeout_seconds=timeout_seconds,
+            )
+        if output.exists():
+            raise SkillUploadError(f"output path was created during download: {output}")
+        temporary_root.rename(output)
+    except SkillUploadError:
+        raise
+    except OSError as exc:
+        raise SkillUploadError(
+            f"cannot create hydrated skill directory: {type(exc).__name__}"
+        ) from exc
+    finally:
+        if temporary_root.exists():
+            shutil.rmtree(temporary_root, ignore_errors=True)
+
+    return {
+        "workspace_id": plan.workspace_id,
+        "skill_id": plan.skill_id,
+        "skill_name": plan.skill_name,
+        "draft_revision": plan.draft_revision,
+        "output_directory": str(output),
+        "file_count": len(plan.files),
+    }
+
+
 def _write_json(value: object) -> None:
     json.dump(value, sys.stdout, indent=2, sort_keys=True)
     _ = sys.stdout.write("\n")
@@ -466,7 +688,7 @@ def _warn_if_plan_permissions_are_broad(plan_value: str | Path) -> None:
         return
     if mode & 0o077:
         print(
-            "warning: upload plan is readable by other users; prefer mode 0600",
+            "warning: transfer plan is readable by other users; prefer mode 0600",
             file=sys.stderr,
         )
 
@@ -481,15 +703,16 @@ def _delete_plan_best_effort(plan_value: str | Path) -> None:
     try:
         plan_path.unlink()
     except OSError as exc:
+        error_name = type(exc).__name__
         print(
-            f"warning: could not delete upload plan {plan_path}: {type(exc).__name__}",
+            f"warning: could not delete transfer plan {plan_path}: {error_name}",
             file=sys.stderr,
         )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Upload Tracecat skill files without base64 or MCP credentials."
+        description="Transfer Tracecat skill files without model-context bytes."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -518,6 +741,31 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="delete the signed upload plan after all PUTs succeed",
     )
+
+    download_parser = subparsers.add_parser(
+        "download", help="hydrate a directory from prepare_skill_download"
+    )
+    _ = download_parser.add_argument(
+        "output",
+        type=Path,
+        help="new local directory to create; must not already exist",
+    )
+    _ = download_parser.add_argument(
+        "--plan",
+        required=True,
+        help="prepare response JSON file, or '-' to read stdin",
+    )
+    _ = download_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=60.0,
+        help="per-file HTTP timeout in seconds (default: 60)",
+    )
+    _ = download_parser.add_argument(
+        "--delete-plan",
+        action="store_true",
+        help="delete the signed download plan after every file verifies",
+    )
     return parser
 
 
@@ -532,14 +780,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.timeout <= 0:
             raise SkillUploadError("--timeout must be greater than zero")
         _warn_if_plan_permissions_are_broad(args.plan)
-        completion = upload_from_plan(
-            args.root,
-            args.plan,
-            timeout_seconds=args.timeout,
-        )
+        if args.command == "upload":
+            result = upload_from_plan(
+                args.root,
+                args.plan,
+                timeout_seconds=args.timeout,
+            )
+        else:
+            result = download_from_plan(
+                args.output,
+                args.plan,
+                timeout_seconds=args.timeout,
+            )
         if args.delete_plan:
             _delete_plan_best_effort(args.plan)
-        _write_json(completion)
+        _write_json(result)
         return 0
     except SkillUploadError as exc:
         print(f"error: {exc}", file=sys.stderr)
