@@ -1,0 +1,32 @@
+tests/test_upload_skill_files.py
+  s_9177a925180b65::t_30e50fae419e32 15,42-51,60-61,64,67-68,70,73-76,78-81,83-88,91-110,112-124,126-133,135-143,145-156,159,161,163,167,178-182,186,188,190,192-196,200,202
+  s_9177a925180b65::t_34f344d2026456 4,7,53-54,56-57,59,125,144
+  s_9177a925180b65::t_018a1d3d18f6b6 14
+plugins/tracecat/skills/tracecat-manage-skills/references/upload-contract.md
+  s_9177a925180b65::t_88e4f0f470eabc 1,3,5,7,11-13,17-22,25-26,32,34,36,38-45,47,49,51,53,59-61,65-82,86-91
+  s_9177a925180b65::t_b7a8333b511636 27
+plugins/tracecat/skills/tracecat-manage-skills/agents/openai.yaml
+  s_9177a925180b65::t_30e50fae419e32 3-4
+plugins/tracecat/skills/tracecat-manage-skills/references/troubleshooting.md
+  s_9177a925180b65::t_88e4f0f470eabc 3,5,9,11,13,15,17,19,21,23,25,27,29-37
+plugins/tracecat/skills/tracecat-manage-skills/scripts/upload_skill_files.py
+  s_9177a925180b65::t_e5370c8435757a 2-10,15,25,30-31,47,60-61,78,161,167-170,174-217,219,221-230,246-247,249,251-253,255-274,276-281,283-289,291-292,295-301,303-310,313-315,319-322,324-329,331-332,335,337,340,342,347-356,358-359,366,371,374-376,378,381-382,384-386,389,400-402,404-409
+plugins/tracecat/skills/tracecat-manage-skills/SKILL.md
+  s_9177a925180b65::t_2e366fcc4096e8 3,8,10-12,15-17,20-21,24-25,28-29,32-33,35,37,39,41-53,55-57,61-68,72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6ad832d22f3b97a7face585e95133f34a688aaf5",
+  "prompts": {},
+  "sessions": {
+    "s_9177a925180b65": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cdc49770-5a42-40d5-969b-73d89a11a08f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
