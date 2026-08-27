@@ -1,4 +1,4 @@
 interface:
   display_name: "Manage Tracecat Skills"
-  short_description: "Transfer Tracecat skills without base64"
-  default_prompt: "Use $tracecat-manage-skills to transfer a local skill directory to or from Tracecat."
+  short_description: "Upload, publish, and re-bind Tracecat skills"
+  default_prompt: "Use $tracecat-manage-skills to upload a local skill directory to Tracecat, publish it, and re-bind the agent presets that use it."
