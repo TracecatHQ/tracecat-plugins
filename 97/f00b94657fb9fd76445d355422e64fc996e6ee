@@ -1,0 +1,25 @@
+plugins/tracecat/plugin.json
+  s_9177a925180b65::t_5f185d5334e63d 4
+plugins/tracecat/skills/tracecat-automation-best-practices/references/secrets-and-oauth.md
+  s_9177a925180b65::t_ccee05ec9a975f 41-42,49-60
+plugins/tracecat/.codex-plugin/plugin.json
+  s_9177a925180b65::t_5f185d5334e63d 3
+plugins/tracecat/.claude-plugin/plugin.json
+  s_9177a925180b65::t_5f185d5334e63d 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "97f00b94657fb9fd76445d355422e64fc996e6ee",
+  "prompts": {},
+  "sessions": {
+    "s_9177a925180b65": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cdc49770-5a42-40d5-969b-73d89a11a08f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
