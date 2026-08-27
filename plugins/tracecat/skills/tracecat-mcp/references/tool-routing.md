@@ -14,8 +14,8 @@ Load the smallest tool family that satisfies the request.
 | Manage cases, tags, fields, or dropdowns | The matching `list_*` tool | Resolve definition IDs before associations or values |
 | Inspect variables or secrets | `list_variables`, `list_secrets_metadata` | Work with metadata only; never request secret values |
 | Configure an agent preset | `get_agent_preset_authoring_context` | Inspect integrations and skills before create/update |
-| Upload or update a local skill | `list_skills` plus `tracecat-manage-skills` | Use staged raw-byte transfer, then publish only if requested |
-| Download or hydrate a local skill | `list_skills` plus `tracecat-manage-skills` | Use the prepared download plan and local verifying helper |
+| Upload or update a local skill | `list_skills`, then `upload_skill` or `update_skill` | `update_skill` for an existing skill; `upload_skill` suffixes the slug on a name collision rather than failing |
+| Publish a skill and attach it to a preset | `publish_skill`, then `update_agent_preset` | Only published versions attach; re-submit the preset's `skills` bindings so the new version resolves |
 
 ## Workflow edit selection
 

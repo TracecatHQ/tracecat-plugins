@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tracecat Slackbot Best Practices"
+  short_description: "Build and debug Tracecat Slack bots and Slack-facing automations."
+  default_prompt: "Use $tracecat-slackbot-best-practices to build or fix a Tracecat Slack bot."
