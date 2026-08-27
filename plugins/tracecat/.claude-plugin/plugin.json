@@ -1,6 +1,6 @@
 {
   "name": "tracecat",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Operate Tracecat safely through its MCP server and platform workflows.",
   "author": {
     "name": "Tracecat"

@@ -38,22 +38,26 @@ headers:
   Authorization: "Bearer ${{ SECRETS.google_drive_oauth.GOOGLE_DRIVE_USER_TOKEN }}"
 ```
 
-When the workspace may have connected either grant type for the same provider, fall back
-across both:
+**Reference the grant that is actually connected**, which `list_integrations` reports per
+provider. A two-key fallback is only valid when the provider has *both* grants connected:
 
 ```yaml
 headers:
   Authorization: "Bearer ${{ SECRETS.azure_log_analytics_oauth.AZURE_LOG_ANALYTICS_USER_TOKEN || SECRETS.azure_log_analytics_oauth.AZURE_LOG_ANALYTICS_SERVICE_TOKEN }}"
 ```
 
-**Caveat: the validator walks both sides of a `||`.** It does not short-circuit the way the
-runtime does, so every branch is checked against what is actually connected. A same-provider
-two-grant fallback like the one above is safe — both branches name the same provider, and the
-validator is checking the token naming rule. A fallback across two *different* providers
-(`${{ SECRETS.okta_oauth.OKTA_USER_TOKEN || SECRETS.entra_oauth.ENTRA_USER_TOKEN }}`) can raise
-a validation error when only one of them is connected, even though the expression would resolve
-correctly at runtime. Pick one provider per expression, and branch on `run_if` if you genuinely
-need two.
+**Why: the validator walks both sides of a `||`.** Validation is a static walk of the parse
+tree, not an evaluation, so `||` never short-circuits there. Each branch is a separate secret
+node, and each resolves to a `(provider_id, grant_type)` pair that must have a connected
+integration. A grant the provider does not have fails with `OAuth provider 'x' is not
+configured for grant type 'client_credentials'` — and one error is enough to block the
+workflow, even though the expression would have resolved fine at runtime.
+
+Two grants of the same provider are two different integrations, so the fallback above needs
+both connected. The same applies across providers
+(`${{ SECRETS.okta_oauth.OKTA_USER_TOKEN || SECRETS.entra_oauth.ENTRA_USER_TOKEN }}`). When
+only one grant or provider is connected, name it directly; branch on `run_if` if you genuinely
+need to choose at runtime.
 
 ## Provider IDs
 
