@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
-"""Transfer local skill directories through Tracecat's signed HTTP plans."""
+"""Build and verify base64 skill upload payloads for Tracecat MCP.
+
+`upload_skill` and `update_skill` accept the whole skill tree as one
+`files` argument, so the encoded bytes travel as tool arguments. This helper
+does not avoid that. It removes the parts an agent should never do by hand:
+walking the directory safely, refusing symlinks, enforcing a root `SKILL.md`,
+computing digests, base64-encoding every file, and proving the encoding
+round-trips before anything is sent.
+"""
 
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
-import http.client
 import json
 import mimetypes
 import os
-import re
-import shutil
-import ssl
 import stat
 import sys
-import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TextIO, cast
-from urllib.parse import SplitResult, urlsplit, urlunsplit
+from typing import cast
 
 _CHUNK_SIZE_BYTES = 1024 * 1024
-_SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 _EXCLUDED_DIRECTORIES = frozenset({".git", ".venv", "__pycache__", "node_modules"})
 _EXCLUDED_FILES = frozenset({".DS_Store"})
+_SKILL_MARKDOWN_PATH = "SKILL.md"
+_LARGE_PAYLOAD_WARNING_BYTES = 512 * 1024
 _CONTENT_TYPES = {
     ".bash": "text/x-shellscript; charset=utf-8",
     ".csv": "text/csv; charset=utf-8",
@@ -40,7 +44,7 @@ _CONTENT_TYPES = {
 
 
 class SkillUploadError(RuntimeError):
-    """Safe user-facing failure that never includes a signed transfer URL."""
+    """Safe user-facing failure that never includes encoded file contents."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,61 +57,14 @@ class LocalSkillFile:
     size_bytes: int
     content_type: str
 
-    def manifest_payload(self) -> dict[str, str | int]:
-        """Return the MCP preparation payload for this file."""
+    def digest_entry(self) -> dict[str, str | int]:
+        """Return the integrity record for this file."""
 
         return {
             "path": self.path,
             "sha256": self.sha256,
             "size_bytes": self.size_bytes,
-            "content_type": self.content_type,
         }
-
-
-@dataclass(frozen=True, slots=True)
-class PreparedUpload:
-    """One server-prepared raw-byte upload."""
-
-    path: str
-    sha256: str
-    size_bytes: int
-    content_type: str
-    upload_id: str
-    upload_url: str
-    method: str
-    headers: tuple[tuple[str, str], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class UploadPlan:
-    """Tracecat MCP response needed to upload and complete a skill draft."""
-
-    workspace_id: str
-    skill_id: str
-    base_revision: int
-    files: tuple[PreparedUpload, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class PreparedDownload:
-    """One server-prepared raw-byte download."""
-
-    path: str
-    sha256: str
-    size_bytes: int
-    content_type: str
-    download_url: str
-
-
-@dataclass(frozen=True, slots=True)
-class DownloadPlan:
-    """Tracecat MCP response needed to hydrate a complete skill draft."""
-
-    workspace_id: str
-    skill_id: str
-    skill_name: str
-    draft_revision: int
-    files: tuple[PreparedDownload, ...]
 
 
 class CliArguments(argparse.Namespace):
@@ -118,9 +75,7 @@ class CliArguments(argparse.Namespace):
         self.command: str = ""
         self.root: Path = Path()
         self.output: Path = Path()
-        self.plan: str = ""
-        self.timeout: float = 60.0
-        self.delete_plan: bool = False
+        self.payload: Path = Path()
 
 
 def _sha256_file(path: Path) -> str:
@@ -198,39 +153,87 @@ def discover_skill_files(
                 raise SkillUploadError(
                     f"non-regular file is not allowed: {relative_path}"
                 )
-            size_bytes = file_path.stat().st_size
             local_files.append(
                 LocalSkillFile(
                     path=relative_path,
                     absolute_path=file_path,
                     sha256=_sha256_file(file_path),
-                    size_bytes=size_bytes,
+                    size_bytes=file_path.stat().st_size,
                     content_type=_content_type(file_path),
                 )
             )
 
     local_files.sort(key=lambda file: file.path)
-    if not any(file.path == "SKILL.md" for file in local_files):
-        raise SkillUploadError("skill root must contain a regular file named SKILL.md")
+    if not any(file.path == _SKILL_MARKDOWN_PATH for file in local_files):
+        raise SkillUploadError(
+            f"skill root must contain a regular file named {_SKILL_MARKDOWN_PATH}"
+        )
     return root, tuple(local_files)
 
 
-def manifest_payload(files: Sequence[LocalSkillFile]) -> dict[str, object]:
-    """Return the exact metadata object accepted by prepare_skill_upload."""
+def _encode_file(file: LocalSkillFile) -> str:
+    """Return verified base64 for one file, re-decoding it as a sanity check."""
 
-    return {"files": [file.manifest_payload() for file in files]}
+    content = file.absolute_path.read_bytes()
+    if len(content) != file.size_bytes or hashlib.sha256(content).hexdigest() != (
+        file.sha256
+    ):
+        raise SkillUploadError(f"file changed while it was being read: {file.path}")
+    encoded = base64.b64encode(content).decode("ascii")
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except ValueError as exc:
+        raise SkillUploadError(
+            f"base64 round-trip failed for {file.path}: encoding is not valid"
+        ) from exc
+    if decoded != content:
+        raise SkillUploadError(
+            f"base64 round-trip failed for {file.path}: decoded bytes differ"
+        )
+    return encoded
+
+
+def upload_files_payload(files: Sequence[LocalSkillFile]) -> list[dict[str, str]]:
+    """Return the exact `files` array accepted by upload_skill and update_skill."""
+
+    entries: list[dict[str, str]] = []
+    for file in files:
+        if file.path == _SKILL_MARKDOWN_PATH:
+            try:
+                _ = file.absolute_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                raise SkillUploadError(
+                    f"{_SKILL_MARKDOWN_PATH} must be readable UTF-8 text"
+                ) from exc
+        entries.append(
+            {
+                "path": file.path,
+                "content_base64": _encode_file(file),
+                "content_type": file.content_type,
+            }
+        )
+    return entries
+
+
+def manifest_payload(files: Sequence[LocalSkillFile]) -> dict[str, object]:
+    """Return the upload payload plus its integrity summary."""
+
+    upload_files = upload_files_payload(files)
+    return {
+        "file_count": len(files),
+        "total_size_bytes": sum(file.size_bytes for file in files),
+        "encoded_size_bytes": sum(
+            len(entry["content_base64"]) for entry in upload_files
+        ),
+        "files": upload_files,
+        "digests": [file.digest_entry() for file in files],
+    }
 
 
 def _as_mapping(value: object, label: str) -> Mapping[str, object]:
     if not isinstance(value, dict):
         raise SkillUploadError(f"{label} must be a JSON object")
     return cast(Mapping[str, object], value)
-
-
-def _as_list(value: object, label: str) -> list[object]:
-    if not isinstance(value, list):
-        raise SkillUploadError(f"{label} must be a JSON array")
-    return cast(list[object], value)
 
 
 def _required_string(value: Mapping[str, object], key: str, label: str) -> str:
@@ -240,531 +243,150 @@ def _required_string(value: Mapping[str, object], key: str, label: str) -> str:
     return item
 
 
-def _required_integer(value: Mapping[str, object], key: str, label: str) -> int:
-    item = value.get(key)
-    if isinstance(item, bool) or not isinstance(item, int):
-        raise SkillUploadError(f"{label}.{key} must be an integer")
-    return item
+def load_payload(payload_value: str | Path) -> dict[str, object]:
+    """Load and structurally validate a payload emitted by `manifest`."""
 
-
-def _validated_plan_path(path: str, label: str) -> str:
-    if "\\" in path:
-        raise SkillUploadError(f"{label}.path must use POSIX separators")
-    path_object = PurePosixPath(path)
-    if (
-        path in {"", "."}
-        or path_object.is_absolute()
-        or ".." in path_object.parts
-        or str(path_object) != path
-    ):
-        raise SkillUploadError(f"{label}.path is not a normalized relative path")
-    return path
-
-
-def _parse_headers(value: object, label: str) -> tuple[tuple[str, str], ...]:
-    mapping = _as_mapping(value, f"{label}.headers")
-    headers: list[tuple[str, str]] = []
-    for key, item in mapping.items():
-        if not isinstance(item, str):
-            raise SkillUploadError(f"{label}.headers values must be strings")
-        if not key or any(character in key for character in "\r\n"):
-            raise SkillUploadError(f"{label}.headers contains an invalid name")
-        if any(character in item for character in "\r\n"):
-            raise SkillUploadError(f"{label}.headers contains an invalid value")
-        headers.append((key, item))
-    return tuple(sorted(headers, key=lambda header: header[0].lower()))
-
-
-def _parse_prepared_upload(value: object, index: int) -> PreparedUpload:
-    label = f"plan.files[{index}]"
-    mapping = _as_mapping(value, label)
-    path = _validated_plan_path(_required_string(mapping, "path", label), label)
-    sha256 = _required_string(mapping, "sha256", label).lower()
-    if _SHA256_PATTERN.fullmatch(sha256) is None:
-        raise SkillUploadError(f"{label}.sha256 must contain 64 hexadecimal characters")
-    size_bytes = _required_integer(mapping, "size_bytes", label)
-    if size_bytes < 0:
-        raise SkillUploadError(f"{label}.size_bytes must be non-negative")
-    method = _required_string(mapping, "method", label)
-    if method != "PUT":
-        raise SkillUploadError(f"{label}.method must be PUT")
-    return PreparedUpload(
-        path=path,
-        sha256=sha256,
-        size_bytes=size_bytes,
-        content_type=_required_string(mapping, "content_type", label),
-        upload_id=_required_string(mapping, "upload_id", label),
-        upload_url=_required_string(mapping, "upload_url", label),
-        method=method,
-        headers=_parse_headers(mapping.get("headers"), label),
-    )
-
-
-def _parse_prepared_download(value: object, index: int) -> PreparedDownload:
-    label = f"plan.files[{index}]"
-    mapping = _as_mapping(value, label)
-    path = _validated_plan_path(_required_string(mapping, "path", label), label)
-    sha256 = _required_string(mapping, "sha256", label).lower()
-    if _SHA256_PATTERN.fullmatch(sha256) is None:
-        raise SkillUploadError(f"{label}.sha256 must contain 64 hexadecimal characters")
-    size_bytes = _required_integer(mapping, "size_bytes", label)
-    if size_bytes < 0:
-        raise SkillUploadError(f"{label}.size_bytes must be non-negative")
-    return PreparedDownload(
-        path=path,
-        sha256=sha256,
-        size_bytes=size_bytes,
-        content_type=_required_string(mapping, "content_type", label),
-        download_url=_required_string(mapping, "download_url", label),
-    )
-
-
-def _load_json(file_handle: TextIO, label: str) -> object:
+    payload_path = Path(payload_value).expanduser()
     try:
-        return cast(object, json.load(file_handle))
+        raw = cast(object, json.loads(payload_path.read_text(encoding="utf-8")))
+    except OSError as exc:
+        raise SkillUploadError(f"cannot read payload: {payload_path}") from exc
     except json.JSONDecodeError as exc:
-        raise SkillUploadError(f"{label} is not valid JSON: {exc.msg}") from exc
+        raise SkillUploadError(f"payload is not valid JSON: {payload_path}") from exc
+
+    payload = _as_mapping(raw, "payload")
+    files = payload.get("files")
+    if not isinstance(files, list) or not files:
+        raise SkillUploadError("payload.files must be a non-empty JSON array")
+    for index, entry_value in enumerate(cast(list[object], files)):
+        label = f"payload.files[{index}]"
+        entry = _as_mapping(entry_value, label)
+        _ = _required_string(entry, "path", label)
+        content = entry.get("content_base64")
+        if not isinstance(content, str):
+            raise SkillUploadError(f"{label}.content_base64 must be a string")
+    return dict(payload)
 
 
-def load_upload_plan(plan_value: str | Path) -> UploadPlan:
-    """Load and validate a prepare_skill_upload response."""
-
-    if str(plan_value) == "-":
-        raw_plan = _load_json(sys.stdin, "stdin upload plan")
-    else:
-        plan_path = Path(plan_value).expanduser()
-        try:
-            with plan_path.open(encoding="utf-8") as file_handle:
-                raw_plan = _load_json(file_handle, f"upload plan {plan_path}")
-        except OSError as exc:
-            raise SkillUploadError(f"cannot read upload plan: {plan_path}") from exc
-
-    mapping = _as_mapping(raw_plan, "plan")
-    raw_files = _as_list(mapping.get("files"), "plan.files")
-    if not raw_files:
-        raise SkillUploadError("plan.files must contain at least one upload")
-    files = tuple(
-        _parse_prepared_upload(raw_file, index)
-        for index, raw_file in enumerate(raw_files)
-    )
-    paths = [file.path for file in files]
-    if len(paths) != len(set(paths)):
-        raise SkillUploadError("plan.files contains duplicate paths")
-    if "SKILL.md" not in paths:
-        raise SkillUploadError("plan.files must include root SKILL.md")
-
-    base_revision = _required_integer(mapping, "base_revision", "plan")
-    if base_revision < 0:
-        raise SkillUploadError("plan.base_revision must be non-negative")
-    return UploadPlan(
-        workspace_id=_required_string(mapping, "workspace_id", "plan"),
-        skill_id=_required_string(mapping, "skill_id", "plan"),
-        base_revision=base_revision,
-        files=files,
-    )
-
-
-def load_download_plan(plan_value: str | Path) -> DownloadPlan:
-    """Load and validate a prepare_skill_download response."""
-
-    if str(plan_value) == "-":
-        raw_plan = _load_json(sys.stdin, "stdin download plan")
-    else:
-        plan_path = Path(plan_value).expanduser()
-        try:
-            with plan_path.open(encoding="utf-8") as file_handle:
-                raw_plan = _load_json(file_handle, f"download plan {plan_path}")
-        except OSError as exc:
-            raise SkillUploadError(f"cannot read download plan: {plan_path}") from exc
-
-    mapping = _as_mapping(raw_plan, "plan")
-    raw_files = _as_list(mapping.get("files"), "plan.files")
-    if not raw_files:
-        raise SkillUploadError("plan.files must contain at least one download")
-    files = tuple(
-        _parse_prepared_download(raw_file, index)
-        for index, raw_file in enumerate(raw_files)
-    )
-    paths = [file.path for file in files]
-    if len(paths) != len(set(paths)):
-        raise SkillUploadError("plan.files contains duplicate paths")
-    if "SKILL.md" not in paths:
-        raise SkillUploadError("plan.files must include root SKILL.md")
-
-    draft_revision = _required_integer(mapping, "draft_revision", "plan")
-    if draft_revision < 0:
-        raise SkillUploadError("plan.draft_revision must be non-negative")
-    return DownloadPlan(
-        workspace_id=_required_string(mapping, "workspace_id", "plan"),
-        skill_id=_required_string(mapping, "skill_id", "plan"),
-        skill_name=_required_string(mapping, "skill_name", "plan"),
-        draft_revision=draft_revision,
-        files=files,
-    )
-
-
-def _validated_upload_url(upload: PreparedUpload) -> SplitResult:
-    parsed = urlsplit(upload.upload_url)
-    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
-        raise SkillUploadError(f"invalid HTTP upload URL for {upload.path}")
-    if parsed.username is not None or parsed.password is not None or parsed.fragment:
-        raise SkillUploadError(f"unsafe HTTP upload URL for {upload.path}")
-    return parsed
-
-
-def _validated_download_url(download: PreparedDownload) -> SplitResult:
-    parsed = urlsplit(download.download_url)
-    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
-        raise SkillUploadError(f"invalid HTTP download URL for {download.path}")
-    if parsed.username is not None or parsed.password is not None or parsed.fragment:
-        raise SkillUploadError(f"unsafe HTTP download URL for {download.path}")
-    return parsed
-
-
-def _http_connection(
-    parsed: SplitResult, *, timeout_seconds: float
-) -> http.client.HTTPConnection:
-    hostname = parsed.hostname
-    if hostname is None:
-        raise SkillUploadError("HTTP transfer URL has no hostname")
-    if parsed.scheme == "https":
-        return http.client.HTTPSConnection(
-            hostname,
-            parsed.port,
-            timeout=timeout_seconds,
-            context=ssl.create_default_context(),
-        )
-    return http.client.HTTPConnection(
-        hostname,
-        parsed.port,
-        timeout=timeout_seconds,
-    )
-
-
-def _content_length_headers(upload: PreparedUpload) -> dict[str, str]:
-    headers = dict(upload.headers)
-    content_length_key = next(
-        (key for key in headers if key.lower() == "content-length"), None
-    )
-    if content_length_key is not None:
-        if headers[content_length_key] != str(upload.size_bytes):
-            raise SkillUploadError(
-                f"invalid Content-Length in upload plan for {upload.path}"
-            )
-    else:
-        headers["Content-Length"] = str(upload.size_bytes)
-    return headers
-
-
-def _upload_file(
-    local_file: LocalSkillFile,
-    upload: PreparedUpload,
-    *,
-    timeout_seconds: float,
-) -> None:
-    parsed = _validated_upload_url(upload)
-    target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
-    headers = _content_length_headers(upload)
-    connection = _http_connection(parsed, timeout_seconds=timeout_seconds)
-
-    try:
-        with local_file.absolute_path.open("rb") as file_handle:
-            connection.request(upload.method, target, body=file_handle, headers=headers)
-            response = connection.getresponse()
-            _ = response.read(1024)
-        if not 200 <= response.status < 300:
-            response_status = f"{response.status} {response.reason}"
-            raise SkillUploadError(
-                f"HTTP upload failed for {upload.path}: status {response_status}"
-            )
-    except SkillUploadError:
-        raise
-    except (OSError, http.client.HTTPException, ValueError) as exc:
-        raise SkillUploadError(
-            f"HTTP upload failed for {upload.path}: {type(exc).__name__}"
-        ) from exc
-    finally:
-        connection.close()
-
-
-def _download_file(
-    download: PreparedDownload,
-    destination: Path,
-    *,
-    timeout_seconds: float,
-) -> None:
-    parsed = _validated_download_url(download)
-    target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
-    connection = _http_connection(parsed, timeout_seconds=timeout_seconds)
-
-    try:
-        connection.request("GET", target)
-        response = connection.getresponse()
-        if not 200 <= response.status < 300:
-            _ = response.read(1024)
-            response_status = f"{response.status} {response.reason}"
-            raise SkillUploadError(
-                f"HTTP download failed for {download.path}: status {response_status}"
-            )
-
-        content_length = response.getheader("Content-Length")
-        if content_length is not None:
-            try:
-                response_size_bytes = int(content_length)
-            except ValueError as exc:
-                raise SkillUploadError(
-                    f"HTTP download returned invalid Content-Length for {download.path}"
-                ) from exc
-            if response_size_bytes != download.size_bytes:
-                raise SkillUploadError(
-                    f"download size differs from plan for {download.path}"
-                )
-
-        hasher = hashlib.sha256()
-        received_size_bytes = 0
-        with destination.open("xb") as file_handle:
-            while chunk := response.read(_CHUNK_SIZE_BYTES):
-                received_size_bytes += len(chunk)
-                if received_size_bytes > download.size_bytes:
-                    raise SkillUploadError(
-                        f"download exceeds planned size for {download.path}"
-                    )
-                hasher.update(chunk)
-                _ = file_handle.write(chunk)
-        if received_size_bytes != download.size_bytes:
-            raise SkillUploadError(
-                f"download size differs from plan for {download.path}"
-            )
-        if hasher.hexdigest() != download.sha256:
-            raise SkillUploadError(
-                f"download SHA-256 differs from plan for {download.path}"
-            )
-    except SkillUploadError:
-        raise
-    except (OSError, http.client.HTTPException, ValueError) as exc:
-        raise SkillUploadError(
-            f"HTTP download failed for {download.path}: {type(exc).__name__}"
-        ) from exc
-    finally:
-        connection.close()
-
-
-def _match_plan_to_local_files(
-    local_files: Sequence[LocalSkillFile],
-    plan: UploadPlan,
-) -> tuple[tuple[LocalSkillFile, PreparedUpload], ...]:
-    local_by_path = {file.path: file for file in local_files}
-    plan_by_path = {file.path: file for file in plan.files}
-    missing_paths = sorted(set(plan_by_path) - set(local_by_path))
-    extra_paths = sorted(set(local_by_path) - set(plan_by_path))
-    if missing_paths or extra_paths:
-        details: list[str] = []
-        if missing_paths:
-            details.append(f"missing locally: {', '.join(missing_paths)}")
-        if extra_paths:
-            details.append(f"not present in plan: {', '.join(extra_paths)}")
-        raise SkillUploadError(
-            f"local skill tree changed after preparation ({'; '.join(details)})"
-        )
-
-    matches: list[tuple[LocalSkillFile, PreparedUpload]] = []
-    for upload in plan.files:
-        local_file = local_by_path[upload.path]
-        if local_file.sha256 != upload.sha256:
-            raise SkillUploadError(
-                f"local file changed after preparation (SHA-256): {upload.path}"
-            )
-        if local_file.size_bytes != upload.size_bytes:
-            raise SkillUploadError(
-                f"local file changed after preparation (size): {upload.path}"
-            )
-        if local_file.content_type != upload.content_type:
-            raise SkillUploadError(
-                f"local file content type differs from upload plan: {upload.path}"
-            )
-        matches.append((local_file, upload))
-    return tuple(matches)
-
-
-def upload_from_plan(
-    root_value: str | Path,
-    plan_value: str | Path,
-    *,
-    timeout_seconds: float,
+def verify_payload(
+    root_value: str | Path, payload_value: str | Path
 ) -> dict[str, object]:
-    """Verify the local tree, stream raw bytes, and return completion arguments."""
+    """Decode an emitted payload and compare it byte-for-byte with the source."""
 
+    payload = load_payload(payload_value)
+    entries = [
+        _as_mapping(entry, "payload.files[]")
+        for entry in cast(list[object], payload["files"])
+    ]
     _, local_files = discover_skill_files(root_value)
-    plan = load_upload_plan(plan_value)
-    matches = _match_plan_to_local_files(local_files, plan)
-    for local_file, upload in matches:
-        _upload_file(local_file, upload, timeout_seconds=timeout_seconds)
-    return {
-        "workspace_id": plan.workspace_id,
-        "skill_id": plan.skill_id,
-        "base_revision": plan.base_revision,
-        "files": [
-            {"path": upload.path, "upload_id": upload.upload_id}
-            for upload in plan.files
-        ],
-    }
+    local_by_path = {file.path: file for file in local_files}
 
-
-def download_from_plan(
-    output_value: str | Path,
-    plan_value: str | Path,
-    *,
-    timeout_seconds: float,
-) -> dict[str, object]:
-    """Hydrate and verify a complete skill tree without exposing file bytes."""
-
-    plan = load_download_plan(plan_value)
-    output_input = Path(output_value).expanduser()
-    if output_input.exists():
-        raise SkillUploadError(f"output path already exists: {output_input}")
-    try:
-        output_parent = output_input.parent.resolve(strict=True)
-    except OSError as exc:
+    payload_paths = sorted(str(entry["path"]) for entry in entries)
+    if len(set(payload_paths)) != len(payload_paths):
+        raise SkillUploadError("payload contains duplicate paths")
+    if payload_paths != sorted(local_by_path):
+        missing = sorted(set(local_by_path) - set(payload_paths))
+        unexpected = sorted(set(payload_paths) - set(local_by_path))
         raise SkillUploadError(
-            f"output parent does not exist: {output_input.parent}"
-        ) from exc
-    if not output_parent.is_dir():
-        raise SkillUploadError(f"output parent is not a directory: {output_parent}")
-    output = output_parent / output_input.name
-
-    try:
-        temporary_root = Path(
-            tempfile.mkdtemp(prefix=f".{output.name}.", dir=output_parent)
+            "payload does not match the local skill tree; "
+            f"missing={missing} unexpected={unexpected}"
         )
-    except OSError as exc:
-        raise SkillUploadError(
-            f"cannot create temporary directory below: {output_parent}"
-        ) from exc
-    try:
-        for download in plan.files:
-            relative_path = PurePosixPath(download.path)
-            destination = temporary_root.joinpath(*relative_path.parts)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            _download_file(
-                download,
-                destination,
-                timeout_seconds=timeout_seconds,
+
+    verified_bytes = 0
+    for entry in entries:
+        path = str(entry["path"])
+        local_file = local_by_path[path]
+        try:
+            decoded = base64.b64decode(
+                cast(str, entry["content_base64"]), validate=True
             )
-        if output.exists():
-            raise SkillUploadError(f"output path was created during download: {output}")
-        temporary_root.rename(output)
-    except SkillUploadError:
-        raise
-    except OSError as exc:
-        raise SkillUploadError(
-            f"cannot create hydrated skill directory: {type(exc).__name__}"
-        ) from exc
-    finally:
-        if temporary_root.exists():
-            shutil.rmtree(temporary_root, ignore_errors=True)
+        except ValueError as exc:
+            raise SkillUploadError(f"invalid base64 content for {path}") from exc
+        expected = local_file.absolute_path.read_bytes()
+        if decoded != expected:
+            raise SkillUploadError(f"decoded bytes differ from source file: {path}")
+        if hashlib.sha256(decoded).hexdigest() != local_file.sha256:
+            raise SkillUploadError(f"decoded SHA-256 differs from source file: {path}")
+        verified_bytes += len(decoded)
 
     return {
-        "workspace_id": plan.workspace_id,
-        "skill_id": plan.skill_id,
-        "skill_name": plan.skill_name,
-        "draft_revision": plan.draft_revision,
-        "output_directory": str(output),
-        "file_count": len(plan.files),
+        "verified": True,
+        "file_count": len(entries),
+        "total_size_bytes": verified_bytes,
     }
 
 
-def _write_json(value: object) -> None:
-    json.dump(value, sys.stdout, indent=2, sort_keys=True)
-    _ = sys.stdout.write("\n")
-
-
-def _warn_if_plan_permissions_are_broad(plan_value: str | Path) -> None:
-    if str(plan_value) == "-":
-        return
-    plan_path = Path(plan_value).expanduser()
+def _write_payload(output_value: str | Path, payload: Mapping[str, object]) -> Path:
+    output_path = Path(output_value).expanduser()
+    if not output_path.parent.is_dir():
+        raise SkillUploadError(f"output directory does not exist: {output_path.parent}")
     try:
-        mode = stat.S_IMODE(plan_path.stat().st_mode)
+        descriptor = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            _ = handle.write("\n")
+        # O_CREAT leaves the mode of a pre-existing file untouched.
+        os.chmod(output_path, 0o600)
+    except OSError as exc:
+        raise SkillUploadError(f"cannot write payload: {output_path}") from exc
+    return output_path
+
+
+def _warn_if_payload_permissions_are_broad(payload_value: str | Path) -> None:
+    try:
+        mode = Path(payload_value).expanduser().stat().st_mode
     except OSError:
         return
-    if mode & 0o077:
+    if mode & (stat.S_IRWXG | stat.S_IRWXO):
         print(
-            "warning: transfer plan is readable by other users; prefer mode 0600",
+            "warning: payload is readable by other users; prefer mode 0600",
             file=sys.stderr,
         )
 
 
-def _delete_plan_best_effort(plan_value: str | Path) -> None:
-    if str(plan_value) == "-":
+def _print_manifest_summary(output_path: Path, payload: Mapping[str, object]) -> None:
+    encoded_size = cast(int, payload["encoded_size_bytes"])
+    print(f"payload: {output_path}")
+    print(f"files: {payload['file_count']}")
+    print(f"total_size_bytes: {payload['total_size_bytes']}")
+    print(f"encoded_size_bytes: {encoded_size}")
+    print("digests:")
+    for digest in cast(list[Mapping[str, object]], payload["digests"]):
+        print(f"  {digest['sha256']}  {digest['size_bytes']:>9}  {digest['path']}")
+    if encoded_size > _LARGE_PAYLOAD_WARNING_BYTES:
         print(
-            "warning: --delete-plan has no effect when reading stdin", file=sys.stderr
-        )
-        return
-    plan_path = Path(plan_value).expanduser()
-    try:
-        plan_path.unlink()
-    except OSError as exc:
-        error_name = type(exc).__name__
-        print(
-            f"warning: could not delete transfer plan {plan_path}: {error_name}",
+            f"warning: {encoded_size} encoded bytes will pass through model context "
+            "as one tool argument; trim large or binary files",
             file=sys.stderr,
         )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Transfer Tracecat skill files without model-context bytes."
+        description="Build and verify base64 skill upload payloads for Tracecat MCP.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     manifest_parser = subparsers.add_parser(
-        "manifest", help="emit file metadata for prepare_skill_upload"
+        "manifest", help="emit the files array for upload_skill or update_skill"
     )
     _ = manifest_parser.add_argument("root", type=Path, help="local skill directory")
-
-    upload_parser = subparsers.add_parser(
-        "upload", help="stream files using a prepare_skill_upload response"
-    )
-    _ = upload_parser.add_argument("root", type=Path, help="local skill directory")
-    _ = upload_parser.add_argument(
-        "--plan",
-        required=True,
-        help="prepare response JSON file, or '-' to read stdin",
-    )
-    _ = upload_parser.add_argument(
-        "--timeout",
-        type=float,
-        default=60.0,
-        help="per-file HTTP timeout in seconds (default: 60)",
-    )
-    _ = upload_parser.add_argument(
-        "--delete-plan",
-        action="store_true",
-        help="delete the signed upload plan after all PUTs succeed",
-    )
-
-    download_parser = subparsers.add_parser(
-        "download", help="hydrate a directory from prepare_skill_download"
-    )
-    _ = download_parser.add_argument(
-        "output",
+    _ = manifest_parser.add_argument(
+        "--output",
         type=Path,
-        help="new local directory to create; must not already exist",
-    )
-    _ = download_parser.add_argument(
-        "--plan",
         required=True,
-        help="prepare response JSON file, or '-' to read stdin",
+        help="payload JSON file to create with mode 0600",
     )
-    _ = download_parser.add_argument(
-        "--timeout",
-        type=float,
-        default=60.0,
-        help="per-file HTTP timeout in seconds (default: 60)",
+
+    verify_parser = subparsers.add_parser(
+        "verify", help="round-trip an emitted payload against the source directory"
     )
-    _ = download_parser.add_argument(
-        "--delete-plan",
-        action="store_true",
-        help="delete the signed download plan after every file verifies",
+    _ = verify_parser.add_argument("root", type=Path, help="local skill directory")
+    _ = verify_parser.add_argument(
+        "--payload",
+        type=Path,
+        required=True,
+        help="payload JSON file emitted by the manifest subcommand",
     )
     return parser
 
@@ -775,26 +397,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "manifest":
             _, files = discover_skill_files(args.root)
-            _write_json(manifest_payload(files))
+            payload = manifest_payload(files)
+            output_path = _write_payload(args.output, payload)
+            _print_manifest_summary(output_path, payload)
             return 0
-        if args.timeout <= 0:
-            raise SkillUploadError("--timeout must be greater than zero")
-        _warn_if_plan_permissions_are_broad(args.plan)
-        if args.command == "upload":
-            result = upload_from_plan(
-                args.root,
-                args.plan,
-                timeout_seconds=args.timeout,
-            )
-        else:
-            result = download_from_plan(
-                args.output,
-                args.plan,
-                timeout_seconds=args.timeout,
-            )
-        if args.delete_plan:
-            _delete_plan_best_effort(args.plan)
-        _write_json(result)
+        _warn_if_payload_permissions_are_broad(args.payload)
+        result = verify_payload(args.root, args.payload)
+        print(
+            f"verified {result['file_count']} files "
+            f"({result['total_size_bytes']} bytes) against {args.root}"
+        )
         return 0
     except SkillUploadError as exc:
         print(f"error: {exc}", file=sys.stderr)

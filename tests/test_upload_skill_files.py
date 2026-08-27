@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import sys
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+
+_SKILL_MARKDOWN = "---\nname: example-skill\ndescription: Example\n---\n"
 
 
 def _load_uploader() -> ModuleType:
@@ -38,150 +39,132 @@ def _load_uploader() -> ModuleType:
 uploader = _load_uploader()
 
 
+def _write_example_skill(root: Path) -> bytes:
+    """Create a skill tree with a binary file and an empty file."""
+
+    (root / "scripts").mkdir(parents=True)
+    (root / "SKILL.md").write_text(_SKILL_MARKDOWN, encoding="utf-8")
+    binary_content = b"\x00\xffraw-binary\x10"
+    (root / "scripts" / "payload.bin").write_bytes(binary_content)
+    (root / "scripts" / "__init__.py").write_bytes(b"")
+    return binary_content
+
+
+def _run_manifest(root: Path, output: Path) -> int:
+    """Run the manifest subcommand without leaking its summary into test output."""
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        return int(uploader.main(["manifest", str(root), "--output", str(output)]))
+
+
 class SkillUploadHelperTests(unittest.TestCase):
-    def test_manifest_and_upload_preserve_raw_binary_and_empty_files(self) -> None:
-        received: dict[str, tuple[bytes, str | None, str | None]] = {}
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_PUT(self) -> None:
-                content_length = int(self.headers["Content-Length"])
-                received[self.path] = (
-                    self.rfile.read(content_length),
-                    self.headers.get("Content-Type"),
-                    self.headers.get("x-amz-checksum-sha256"),
-                )
-                self.send_response(200)
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-
-            def log_message(self, format: str, *args: Any) -> None:
-                del format, args
-
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.addCleanup(thread.join, 5)
-        self.addCleanup(server.server_close)
-        self.addCleanup(server.shutdown)
-
+    def test_manifest_preserves_raw_binary_and_empty_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory) / "example-skill"
-            (root / "scripts").mkdir(parents=True)
-            (root / "SKILL.md").write_text(
-                "---\nname: example-skill\ndescription: Example\n---\n",
-                encoding="utf-8",
-            )
-            binary_content = b"\x00\xffraw-binary\x10"
-            (root / "scripts" / "payload.bin").write_bytes(binary_content)
-            (root / "scripts" / "__init__.py").write_bytes(b"")
+            binary_content = _write_example_skill(root)
 
             _, local_files = uploader.discover_skill_files(root)
-            manifest = uploader.manifest_payload(local_files)
+            payload = uploader.manifest_payload(local_files)
+
             self.assertEqual(
-                [file["path"] for file in manifest["files"]],
+                [file["path"] for file in payload["files"]],
                 ["SKILL.md", "scripts/__init__.py", "scripts/payload.bin"],
             )
-            self.assertEqual(manifest["files"][1]["size_bytes"], 0)
-
-            port = server.server_address[1]
-            plan_files = []
-            for index, file in enumerate(local_files):
-                plan_files.append(
-                    {
-                        **file.manifest_payload(),
-                        "upload_id": f"00000000-0000-0000-0000-{index:012d}",
-                        "upload_url": (
-                            f"http://127.0.0.1:{port}/upload/{index}?signature=secret"
-                        ),
-                        "method": "PUT",
-                        "headers": {
-                            "Content-Type": file.content_type,
-                            "x-amz-checksum-sha256": base64.b64encode(
-                                bytes.fromhex(file.sha256)
-                            ).decode("ascii"),
-                        },
-                        "expires_at": "2099-01-01T00:00:00Z",
-                    }
-                )
-            plan = {
-                "workspace_id": "11111111-1111-1111-1111-111111111111",
-                "skill_id": "22222222-2222-2222-2222-222222222222",
-                "base_revision": 7,
-                "created": False,
-                "files": plan_files,
-            }
-            plan_path = Path(temporary_directory) / "plan.json"
-            plan_path.write_text(json.dumps(plan), encoding="utf-8")
-            plan_path.chmod(0o600)
-
-            completion = uploader.upload_from_plan(
-                root,
-                plan_path,
-                timeout_seconds=5,
+            self.assertEqual(payload["file_count"], 3)
+            self.assertEqual(
+                payload["total_size_bytes"],
+                len(_SKILL_MARKDOWN.encode("utf-8")) + len(binary_content),
+            )
+            self.assertEqual(payload["digests"][1]["size_bytes"], 0)
+            self.assertEqual(payload["files"][1]["content_base64"], "")
+            self.assertEqual(
+                base64.b64decode(payload["files"][2]["content_base64"], validate=True),
+                binary_content,
+            )
+            self.assertEqual(
+                payload["files"][2]["content_type"], "application/octet-stream"
             )
 
-        self.assertEqual(received["/upload/1?signature=secret"][0], b"")
-        self.assertEqual(
-            received["/upload/2?signature=secret"],
-            (
-                binary_content,
-                "application/octet-stream",
-                base64.b64encode(hashlib.sha256(binary_content).digest()).decode(
-                    "ascii"
-                ),
-            ),
-        )
-        self.assertEqual(completion["base_revision"], 7)
-        self.assertEqual(
-            [file["path"] for file in completion["files"]],
-            ["SKILL.md", "scripts/__init__.py", "scripts/payload.bin"],
-        )
-        self.assertTrue(
-            all("content_base64" not in file for file in completion["files"])
-        )
-
-    def test_upload_rejects_tree_drift_before_http(self) -> None:
+    def test_manifest_entries_match_upload_skill_file_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory) / "example-skill"
-            root.mkdir()
-            (root / "SKILL.md").write_text(
-                "---\nname: example-skill\ndescription: Example\n---\n",
-                encoding="utf-8",
-            )
-            _, local_files = uploader.discover_skill_files(root)
-            local_file = local_files[0]
-            plan = {
-                "workspace_id": "11111111-1111-1111-1111-111111111111",
-                "skill_id": "22222222-2222-2222-2222-222222222222",
-                "base_revision": 1,
-                "files": [
-                    {
-                        **local_file.manifest_payload(),
-                        "upload_id": "33333333-3333-3333-3333-333333333333",
-                        "upload_url": "http://127.0.0.1:1/unused?signature=secret",
-                        "method": "PUT",
-                        "headers": {"Content-Type": local_file.content_type},
-                    }
-                ],
-            }
-            plan_path = Path(temporary_directory) / "plan.json"
-            plan_path.write_text(json.dumps(plan), encoding="utf-8")
-            (root / "new-file.txt").write_text("changed", encoding="utf-8")
+            _ = _write_example_skill(root)
 
+            _, local_files = uploader.discover_skill_files(root)
+            payload = uploader.manifest_payload(local_files)
+
+            for entry in payload["files"]:
+                self.assertEqual(
+                    sorted(entry), ["content_base64", "content_type", "path"]
+                )
+                self.assertIsInstance(entry["path"], str)
+                self.assertIsInstance(entry["content_base64"], str)
+                self.assertIsInstance(entry["content_type"], str)
+                self.assertNotIn("\\", entry["path"])
+                self.assertFalse(entry["path"].startswith("/"))
+
+    def test_manifest_digests_match_source_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory) / "example-skill"
+            _ = _write_example_skill(root)
+
+            _, local_files = uploader.discover_skill_files(root)
+            payload = uploader.manifest_payload(local_files)
+
+            for digest in payload["digests"]:
+                source = (root / digest["path"]).read_bytes()
+                self.assertEqual(digest["sha256"], hashlib.sha256(source).hexdigest())
+                self.assertEqual(digest["size_bytes"], len(source))
+
+    def test_emitted_payload_round_trips_against_source_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory) / "example-skill"
+            _ = _write_example_skill(root)
+            payload_path = Path(temporary_directory) / "payload.json"
+
+            self.assertEqual(_run_manifest(root, payload_path), 0)
+            self.assertEqual(payload_path.stat().st_mode & 0o777, 0o600)
+
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            for entry in payload["files"]:
+                self.assertEqual(
+                    base64.b64decode(entry["content_base64"], validate=True),
+                    (root / entry["path"]).read_bytes(),
+                )
+
+            result = uploader.verify_payload(root, payload_path)
+            self.assertTrue(result["verified"])
+            self.assertEqual(result["file_count"], 3)
+
+    def test_verify_rejects_tree_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory) / "example-skill"
+            _ = _write_example_skill(root)
+            payload_path = Path(temporary_directory) / "payload.json"
+            self.assertEqual(_run_manifest(root, payload_path), 0)
+
+            (root / "new-file.txt").write_text("added", encoding="utf-8")
             with self.assertRaisesRegex(
                 uploader.SkillUploadError,
-                "local skill tree changed after preparation",
+                "payload does not match the local skill tree",
             ):
-                uploader.upload_from_plan(root, plan_path, timeout_seconds=1)
+                uploader.verify_payload(root, payload_path)
 
-    def test_manifest_rejects_symlinked_files(self) -> None:
+            (root / "new-file.txt").unlink()
+            (root / "SKILL.md").write_text(
+                f"{_SKILL_MARKDOWN}changed\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                uploader.SkillUploadError,
+                "decoded bytes differ from source file",
+            ):
+                uploader.verify_payload(root, payload_path)
+
+    def test_discovery_rejects_symlinked_files_and_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory) / "example-skill"
             root.mkdir()
-            (root / "SKILL.md").write_text(
-                "---\nname: example-skill\ndescription: Example\n---\n",
-                encoding="utf-8",
-            )
+            (root / "SKILL.md").write_text(_SKILL_MARKDOWN, encoding="utf-8")
             outside = Path(temporary_directory) / "outside.txt"
             outside.write_text("outside", encoding="utf-8")
             (root / "linked.txt").symlink_to(outside)
@@ -192,173 +175,31 @@ class SkillUploadHelperTests(unittest.TestCase):
             ):
                 uploader.discover_skill_files(root)
 
-    def test_download_hydrates_verified_binary_and_empty_files_atomically(
-        self,
-    ) -> None:
-        payloads = {
-            "/download/skill?signature=secret": b"---\nname: example-skill\n---\n",
-            "/download/payload?signature=secret": b"\x00\xffraw-binary\x10",
-            "/download/empty?signature=secret": b"",
-        }
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:
-                payload = payloads[self.path]
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                _ = self.wfile.write(payload)
-
-            def log_message(self, format: str, *args: Any) -> None:
-                del format, args
-
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.addCleanup(thread.join, 5)
-        self.addCleanup(server.server_close)
-        self.addCleanup(server.shutdown)
-
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            output = root / "hydrated-skill"
-            port = server.server_address[1]
-            files = []
-            for path, route, content_type in (
-                (
-                    "SKILL.md",
-                    "/download/skill?signature=secret",
-                    "text/markdown; charset=utf-8",
-                ),
-                (
-                    "scripts/payload.bin",
-                    "/download/payload?signature=secret",
-                    "application/octet-stream",
-                ),
-                (
-                    "scripts/__init__.py",
-                    "/download/empty?signature=secret",
-                    "text/x-python; charset=utf-8",
-                ),
-            ):
-                payload = payloads[route]
-                files.append(
-                    {
-                        "path": path,
-                        "sha256": hashlib.sha256(payload).hexdigest(),
-                        "size_bytes": len(payload),
-                        "content_type": content_type,
-                        "download_url": f"http://127.0.0.1:{port}{route}",
-                        "expires_at": "2099-01-01T00:00:00Z",
-                    }
-                )
-            plan = {
-                "workspace_id": "11111111-1111-1111-1111-111111111111",
-                "skill_id": "22222222-2222-2222-2222-222222222222",
-                "skill_name": "example-skill",
-                "draft_revision": 7,
-                "files": files,
-            }
-            plan_path = root / "download-plan.json"
-            plan_path.write_text(json.dumps(plan), encoding="utf-8")
-            plan_path.chmod(0o600)
-
-            result = uploader.download_from_plan(
-                output,
-                plan_path,
-                timeout_seconds=5,
-            )
-
-            self.assertEqual(
-                (output / "SKILL.md").read_bytes(),
-                payloads["/download/skill?signature=secret"],
-            )
-            self.assertEqual(
-                (output / "scripts" / "payload.bin").read_bytes(),
-                payloads["/download/payload?signature=secret"],
-            )
-            self.assertEqual((output / "scripts" / "__init__.py").read_bytes(), b"")
-            self.assertEqual(result["file_count"], 3)
-            self.assertTrue(Path(result["output_directory"]).samefile(output))
-
-    def test_download_digest_failure_does_not_expose_partial_directory(self) -> None:
-        payload = b"unexpected bytes"
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                _ = self.wfile.write(payload)
-
-            def log_message(self, format: str, *args: Any) -> None:
-                del format, args
-
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.addCleanup(thread.join, 5)
-        self.addCleanup(server.server_close)
-        self.addCleanup(server.shutdown)
-
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            output = root / "hydrated-skill"
-            plan = {
-                "workspace_id": "11111111-1111-1111-1111-111111111111",
-                "skill_id": "22222222-2222-2222-2222-222222222222",
-                "skill_name": "example-skill",
-                "draft_revision": 7,
-                "files": [
-                    {
-                        "path": "SKILL.md",
-                        "sha256": "0" * 64,
-                        "size_bytes": len(payload),
-                        "content_type": "text/markdown; charset=utf-8",
-                        "download_url": (
-                            f"http://127.0.0.1:{server.server_address[1]}"
-                            "/download?signature=secret"
-                        ),
-                    }
-                ],
-            }
-            plan_path = root / "download-plan.json"
-            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            (root / "linked.txt").unlink()
+            outside_directory = Path(temporary_directory) / "outside-dir"
+            outside_directory.mkdir()
+            (outside_directory / "leaked.txt").write_text("leaked", encoding="utf-8")
+            (root / "linked-dir").symlink_to(outside_directory)
 
             with self.assertRaisesRegex(
                 uploader.SkillUploadError,
-                "download SHA-256 differs from plan",
+                "symlinked directory is not allowed",
             ):
-                uploader.download_from_plan(output, plan_path, timeout_seconds=5)
+                uploader.discover_skill_files(root)
 
-            self.assertFalse(output.exists())
-            self.assertFalse(any(root.glob(".hydrated-skill.*")))
-
-    def test_download_plan_rejects_path_traversal(self) -> None:
+    def test_discovery_requires_root_skill_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            plan = {
-                "workspace_id": "11111111-1111-1111-1111-111111111111",
-                "skill_id": "22222222-2222-2222-2222-222222222222",
-                "skill_name": "example-skill",
-                "draft_revision": 7,
-                "files": [
-                    {
-                        "path": "../SKILL.md",
-                        "sha256": "0" * 64,
-                        "size_bytes": 0,
-                        "content_type": "text/markdown; charset=utf-8",
-                        "download_url": "https://example.invalid/download",
-                    }
-                ],
-            }
-            plan_path = Path(temporary_directory) / "download-plan.json"
-            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            root = Path(temporary_directory) / "example-skill"
+            (root / "references").mkdir(parents=True)
+            (root / "references" / "SKILL.md").write_text(
+                _SKILL_MARKDOWN, encoding="utf-8"
+            )
 
             with self.assertRaisesRegex(
                 uploader.SkillUploadError,
-                "path is not a normalized relative path",
+                "must contain a regular file named SKILL.md",
             ):
-                uploader.load_download_plan(plan_path)
+                uploader.discover_skill_files(root)
 
 
 if __name__ == "__main__":

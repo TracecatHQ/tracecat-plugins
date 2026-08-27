@@ -14,13 +14,14 @@ Use Tracecat's remote MCP server as the control plane. Discover current workspac
 3. Read the current object before mutating it. Follow cursors when the matching object may be outside the first page.
 4. Choose the narrowest relevant tool family from [references/tool-routing.md](references/tool-routing.md).
 5. For writes, reuse the latest returned ID and revision. Validate before publishing or running when the domain supports validation.
+6. Re-read the object, or inspect the execution, to verify the outcome.
 
 ## Progressive context routing
 
 - Read [references/platform-concepts.md](references/platform-concepts.md) when the user is unfamiliar with drafts, published versions, registry actions, agent presets, or workspace scoping.
 - Read [references/tool-routing.md](references/tool-routing.md) when selecting tools across workflows, cases, tables, integrations, agents, or skills.
-- Use the `tracecat-manage-skills` skill for uploading, replacing, or downloading a local skill directory. Its helper keeps raw file bytes out of model context.
-- When a future domain skill such as `tracecat-automation-best-practices` is installed, use it for that domain's authoring rules while retaining this skill for connection and routing.
+- Use the `tracecat-manage-skills` skill for uploading or replacing a local skill directory. Its helper assembles and verifies the upload payload; publishing and re-binding the consuming preset are separate steps.
+- Use the `tracecat-automation-best-practices` skill for workflow, table, expression, and agent-preset authoring rules, and `tracecat-slackbot-best-practices` for Slack-facing automations. Use `tracecat-platform-guide` when the user needs product concepts or UI navigation rather than an edit. This skill stays responsible for connection and tool routing.
 
 ## Operating rules
 
@@ -31,15 +32,3 @@ Use Tracecat's remote MCP server as the control plane. Discover current workspac
 - Inspect secret and integration metadata, but never request, print, or persist secret values in prompts or files.
 - Use Tracecat-native expressions and action schemas. Call authoring-context tools instead of inventing action arguments.
 - Report validation errors and execution failures with the object ID and the safe, structured error details returned by Tracecat.
-
-## Common workflow
-
-For most changes:
-
-1. Discover the workspace and target object.
-2. Fetch current state and its revision.
-3. Fetch domain authoring context if arguments or schemas are involved.
-4. Make the smallest change.
-5. Validate.
-6. Publish or execute only if requested.
-7. Re-read or inspect the execution to verify the outcome.

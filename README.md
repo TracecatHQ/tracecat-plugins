@@ -6,20 +6,27 @@ The package at `plugins/tracecat/` follows the Agent Plugins v1 layout and also 
 
 ```text
 plugins/tracecat/
-├── plugin.json                    # Agent Plugins v1
-├── mcp.json                       # portable Tracecat MCP connection
-├── .codex-plugin/plugin.json      # Codex metadata
-├── .claude-plugin/plugin.json     # Claude Code metadata
-├── .mcp.json                      # native Codex and Claude MCP config
+├── plugin.json                             # Agent Plugins v1
+├── mcp.json                                # portable Tracecat MCP connection
+├── .codex-plugin/plugin.json               # Codex metadata
+├── .claude-plugin/plugin.json              # Claude Code metadata
+├── .mcp.json                               # native Codex and Claude MCP config
 └── skills/
-    ├── tracecat-mcp/
-    │   └── references/            # connection, routing, platform concepts
-    └── tracecat-manage-skills/
-        ├── scripts/               # deterministic local file transfer
-        └── references/            # upload contract and recovery
+    ├── tracecat-mcp/                       # connect, route, navigate safely
+    ├── tracecat-automation-best-practices/ # workflow, table, run-python, preset authoring
+    ├── tracecat-slackbot-best-practices/   # Slack-facing automations and chatops
+    ├── tracecat-platform-guide/            # product orientation and UI navigation
+    └── tracecat-manage-skills/             # transfer a skill directory over MCP
 ```
 
-Future domain skills, including Tracecat automation best practices, belong beside these skills. Cases and detailed guidance stay under each skill's `references/` directory so agents only load them when relevant.
+Every skill carries an `agents/openai.yaml` interface stub for Codex, and pushes detail into its
+own `references/` directory so agents load it only when the task calls for it. `tracecat-mcp` is
+the entry point: it covers connection and tool routing, and hands off to the domain skills.
+
+Three of these skills are also consumed by Tracecat itself. The in-product workspace-chat copilot
+stages `tracecat-automation-best-practices`, `tracecat-slackbot-best-practices`, and
+`tracecat-platform-guide` from this repository, so this repository is the single authoring home
+for that guidance. Changes here reach both external coding agents and the in-product copilot.
 
 ## Install
 

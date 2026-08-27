@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tracecat Automation Best Practices"
+  short_description: "Author and debug Tracecat workflows, tables, and agents."
+  default_prompt: "Use $tracecat-automation-best-practices to build or fix a Tracecat automation."
