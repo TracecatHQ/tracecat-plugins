@@ -5,8 +5,9 @@ description: Use when building, editing, validating, or debugging generic Tracec
 
 # Tracecat Automation Best Practices
 
-For Slack-facing automations, use `$tracecat-slackbot-best-practices`; for product concepts and
-UI navigation, `$tracecat-platform-guide`. On-demand references:
+For Slack-facing automations, use `$tracecat-slackbot-best-practices`. In Tracecat Workspace Chat,
+load `$tracecat-workspace-chat` first; its host-specific tool mapping overrides the external MCP
+steps below. On-demand references:
 [expressions](references/expressions-and-conditions.md), [run-python](references/run-python.md),
 [tables](references/tables.md), [trigger-inputs](references/trigger-inputs.md),
 [case-triggers](references/cases-and-triggers.md), [secrets](references/secrets-and-oauth.md),
@@ -15,7 +16,7 @@ UI navigation, `$tracecat-platform-guide`. On-demand references:
 
 ## Workflow
 
-Start from live MCP context rather than guessing:
+For an external Tracecat MCP connection, start from live context rather than guessing:
 
 1. Discover the workspace with `list_workspaces`.
 2. Read `tracecat://platform/dsl-reference` when DSL syntax or examples are needed.
@@ -25,8 +26,8 @@ Start from live MCP context rather than guessing:
 5. Validate with `validate_workflow`, run a draft or published execution when appropriate,
    then inspect failures with `list_workflow_executions` and `get_workflow_execution`.
 
-In Tracecat workspace chat these are exposed as `core.workflow.<name>` registry actions; over
-MCP the names are bare.
+Other hosts can expose a different tool surface. Follow their adapter rather than mechanically
+prefixing these bare MCP names.
 
 Clarify production choices that change the workflow contract: workspace, integration/provider,
 secret source, publish/run behavior, destructive side effects, approvals, or acceptance
