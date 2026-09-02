@@ -1,6 +1,6 @@
 # Tracecat agent plugins
 
-Tracecat's public-facing agent package for working with the Tracecat MCP server and platform. The repository is private while the interface is being stabilized.
+Tracecat's public-facing agent package for working with the Tracecat MCP server and platform.
 
 The package at `plugins/tracecat/` follows the Agent Plugins v1 layout and also carries native manifests for Codex and Claude Code. It contains one Tracecat plugin whose skills disclose domain guidance progressively:
 
