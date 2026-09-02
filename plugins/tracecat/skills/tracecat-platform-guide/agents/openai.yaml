@@ -1,4 +1,0 @@
-interface:
-  display_name: "Tracecat Platform Guide"
-  short_description: "Explain Tracecat concepts and where features live in the UI."
-  default_prompt: "Use $tracecat-platform-guide to explain a Tracecat concept or find a feature."

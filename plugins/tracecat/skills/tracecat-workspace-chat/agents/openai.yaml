@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tracecat Workspace Chat"
+  short_description: "Use Tracecat safely from Workspace Chat."
+  default_prompt: "Use $tracecat-workspace-chat to answer a Tracecat platform question."

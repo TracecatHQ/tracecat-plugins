@@ -21,7 +21,7 @@ Use Tracecat's remote MCP server as the control plane. Discover current workspac
 - Read [references/platform-concepts.md](references/platform-concepts.md) when the user is unfamiliar with drafts, published versions, registry actions, agent presets, or workspace scoping.
 - Read [references/tool-routing.md](references/tool-routing.md) when selecting tools across workflows, cases, tables, integrations, agents, or skills.
 - Use the `tracecat-manage-skills` skill for uploading or replacing a local skill directory. Its helper assembles and verifies the upload payload; publishing and re-binding the consuming preset are separate steps.
-- Use the `tracecat-automation-best-practices` skill for workflow, table, expression, and agent-preset authoring rules, and `tracecat-slackbot-best-practices` for Slack-facing automations. Use `tracecat-platform-guide` when the user needs product concepts or UI navigation rather than an edit. This skill stays responsible for connection and tool routing.
+- Use the `tracecat-automation-best-practices` skill for workflow, table, expression, and agent-preset authoring rules, and `tracecat-slackbot-best-practices` for Slack-facing automations. For product concepts or UI navigation, read [references/platform-concepts.md](references/platform-concepts.md) and the relevant Tracecat documentation. This skill stays responsible for external MCP connection and tool routing; `tracecat-workspace-chat` is the in-product adapter for Workspace Chat.
 
 ## Operating rules
 

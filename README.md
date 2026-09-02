@@ -15,7 +15,7 @@ plugins/tracecat/
     ├── tracecat-mcp/                       # connect, route, navigate safely
     ├── tracecat-automation-best-practices/ # workflow, table, run-python, preset authoring
     ├── tracecat-slackbot-best-practices/   # Slack-facing automations and chatops
-    ├── tracecat-platform-guide/            # product orientation and UI navigation
+    ├── tracecat-workspace-chat/            # in-product tool and local-docs adapter
     └── tracecat-manage-skills/             # transfer a skill directory over MCP
 ```
 
@@ -23,10 +23,11 @@ Every skill carries an `agents/openai.yaml` interface stub for Codex, and pushes
 own `references/` directory so agents load it only when the task calls for it. `tracecat-mcp` is
 the entry point: it covers connection and tool routing, and hands off to the domain skills.
 
-Three of these skills are also consumed by Tracecat itself. The in-product workspace-chat copilot
-stages `tracecat-automation-best-practices`, `tracecat-slackbot-best-practices`, and
-`tracecat-platform-guide` from this repository, so this repository is the single authoring home
-for that guidance. Changes here reach both external coding agents and the in-product copilot.
+Three of these skills are also consumed by Tracecat itself. The in-product Workspace Chat copilot
+stages `tracecat-workspace-chat`, `tracecat-automation-best-practices`, and
+`tracecat-slackbot-best-practices` from this repository. The Tracecat application image adds the
+matching product documentation under the adapter's `references/docs/` directory at build time, so
+this repository remains the single authoring home for the skills without duplicating product docs.
 
 ## Install
 
