@@ -1,0 +1,37 @@
+plugins/tracecat/skills/tracecat-workspace-chat/references/tool-mapping.md
+  s_c966cf3ad9dcbc::t_9f77200afd4f03 1-4,7-31,36-37,41-63,66-70
+  s_c966cf3ad9dcbc::t_895a5da082731c 5-6,32-35,38-40,64-65
+plugins/tracecat/skills/tracecat-mcp/SKILL.md
+  s_c966cf3ad9dcbc::t_05a9bf62dc517c 24
+plugins/tracecat/skills/tracecat-workspace-chat/SKILL.md
+  s_c966cf3ad9dcbc::t_895a5da082731c 3,15-17,21-23,25-26,36-37
+  s_c966cf3ad9dcbc::t_2fe93604ba9ab1 1-2,4-14,18-20,24,27-35,38-49
+README.md
+  s_c966cf3ad9dcbc::t_05a9bf62dc517c 18,26-30
+plugins/tracecat/skills/tracecat-automation-best-practices/SKILL.md
+  s_c966cf3ad9dcbc::t_05a9bf62dc517c 8-10,19,29-30
+plugins/tracecat/.claude-plugin/plugin.json
+  s_c966cf3ad9dcbc::t_05a9bf62dc517c 3
+plugins/tracecat/plugin.json
+  s_c966cf3ad9dcbc::t_05a9bf62dc517c 4
+plugins/tracecat/.codex-plugin/plugin.json
+  s_c966cf3ad9dcbc::t_05a9bf62dc517c 3
+plugins/tracecat/skills/tracecat-workspace-chat/agents/openai.yaml
+  s_c966cf3ad9dcbc::t_c97acbbc3567ab 2-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ef21c5aea975eab4eea6cf9679cd48d29484844d",
+  "prompts": {},
+  "sessions": {
+    "s_c966cf3ad9dcbc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06370-1876-7c91-8f74-9ed313754937",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
