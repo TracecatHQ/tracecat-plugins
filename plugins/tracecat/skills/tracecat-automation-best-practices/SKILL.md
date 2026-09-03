@@ -7,7 +7,7 @@ description: Use when building, editing, validating, or debugging generic Tracec
 
 For Slack-facing automations, use `$tracecat-slackbot-best-practices`. In Tracecat Workspace Chat,
 load `$tracecat-workspace-chat` first; its host-specific tool mapping overrides the external MCP
-steps below. On-demand references:
+steps below. On-demand references: [graph-shape](references/graph-shape.md),
 [expressions](references/expressions-and-conditions.md), [run-python](references/run-python.md),
 [tables](references/tables.md), [trigger-inputs](references/trigger-inputs.md),
 [case-triggers](references/cases-and-triggers.md), [secrets](references/secrets-and-oauth.md),
@@ -33,8 +33,29 @@ Clarify production choices that change the workflow contract: workspace, integra
 secret source, publish/run behavior, destructive side effects, approvals, or acceptance
 criteria. If the request is already specific enough, proceed.
 
-Sketch the workflow shape before authoring. Prefer readable left-to-right or top-to-bottom
-flows, human-readable refs, few branches, and layout refs aligned with definition refs.
+## Graph shape
+
+Sketch the shape before authoring and keep it as close to one line as the work allows. Prefer
+linear over parallel, and readable over fully connected: **fewer edges is the metric.**
+
+- **`depends_on` is execution order, not data wiring.** An action can read
+  `ACTIONS.<ref>.result` from any ancestor, not only a direct parent — validation checks that
+  the ref exists in the workflow, not that it is a parent. Add an edge when the action must
+  *wait*, never to make a value reachable.
+- Default to a single chain. Branch only for genuinely independent work worth running
+  concurrently, and rejoin only when a later action needs results from more than one branch.
+- **Do not re-assert an upstream condition in `run_if`.** A skip propagates to every task whose
+  dependency edges are all skipped, so one gate covers everything below it on a chain. The
+  exception is a join: a task with several parents is not force-skipped while a parent
+  survives, so a guard there does change behavior.
+- One parent is the norm. More than one means a deliberate join — choose `join_strategy` on
+  purpose.
+- Keep ordinary workflows around 20 nodes or fewer and agentic workflows around 6 nodes or
+  fewer. Prefer readable left-to-right or top-to-bottom flows, human-readable refs, and layout
+  refs aligned with definition refs.
+
+See [graph-shape](references/graph-shape.md) for a worked over-connected rewrite, join
+strategies, error edges, and why scatter is not branching.
 
 ## Choosing between an agent and Python
 
@@ -93,8 +114,6 @@ helper to compensate for a presumed limitation — see
 
 ## Authoring Defaults
 
-- Prefer linear, readable graphs. Keep ordinary workflows around 20 nodes or fewer and
-  agentic workflows around 6 nodes or fewer.
 - For agentic workflows, push most behavior into the agent prompt/preset. For event-driven
   workflows, a single reshape/redact/upsert action before the agent is usually the right
   deterministic boundary.
@@ -125,6 +144,9 @@ helper to compensate for a presumed limitation — see
 - Using Python for the *agentic* part — composing or posting an agent's Slack message, or
   making routing/judgment calls in a script. The agent owns message composition, posting (via
   a Slack tool), and judgment; Python owns deterministic data plumbing.
+- Over-connecting the graph: an edge from every producer to every consumer, plus a `run_if` on
+  every branch repeating a condition an ancestor already enforced. Read from ancestors, keep
+  one chain, and gate once (see [graph-shape](references/graph-shape.md)).
 - Workflow action names are not MCP tool names. Use MCP tools such as `create_workflow` to
   manage workflows, and action names such as `core.http_request` only inside workflow YAML.
 - Inventing `tools.*` action names. Discover actions with `list_actions`, then inspect exact
