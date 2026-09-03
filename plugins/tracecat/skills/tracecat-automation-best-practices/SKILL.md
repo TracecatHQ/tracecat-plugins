@@ -46,8 +46,11 @@ linear over parallel, and readable over fully connected: **fewer edges is the me
   concurrently, and rejoin only when a later action needs results from more than one branch.
 - **Do not re-assert an upstream condition in `run_if`.** A skip propagates to every task whose
   dependency edges are all skipped, so one gate covers everything below it on a chain. The
-  exception is a join: a task with several parents is not force-skipped while a parent
-  survives, so a guard there does change behavior.
+  exception is a join, and it is a trap: a task with several parents is not force-skipped
+  while one survives, but the default `join_strategy: all` then requires *every* parent to
+  have been visited, so one skipped branch makes the join unreachable and **fails the
+  workflow**. Use `join_strategy: any`, or repeat the branch's condition on the join so it
+  self-skips first.
 - One parent is the norm. More than one means a deliberate join — choose `join_strategy` on
   purpose.
 - Keep ordinary workflows around 20 nodes or fewer and agentic workflows around 6 nodes or

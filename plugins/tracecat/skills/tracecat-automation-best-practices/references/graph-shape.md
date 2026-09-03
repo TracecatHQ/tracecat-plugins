@@ -160,8 +160,12 @@ escalation, because a skipped `triage_alert` skips everything below it.
   condition downstream is dead weight, and a stale copy of it is a bug waiting for the day the
   two conditions diverge.
 - A task with a mix of skipped and surviving parents is not force-skipped, and its
-  `join_strategy` decides what happens next. This is the case where a `run_if` on the task
-  itself earns its place.
+  `join_strategy` decides what happens next. Reachability is checked immediately after the
+  self-skip check, and the default `join_strategy: all` requires *every* dependency edge to
+  have been visited — so a mixed set makes the task unreachable, which **fails the workflow**
+  rather than skipping it. This is the case where a `run_if` on the task itself earns its
+  place: it is evaluated before the reachability check, so a join that repeats its branch's
+  condition self-skips cleanly instead of failing.
 - A failure is not a skip. When an action fails, its non-error edges are pruned, so anything
   hanging off the default success edge does not run. Do not write a `run_if` that asks whether
   the parent succeeded; add an explicit `<ref>.error` dependency when you want a failure path.
@@ -203,7 +207,10 @@ different systems, not two halves of one sequential thought.
 ```
 
 `join_strategy: all` is the default: every parent must have completed on a surviving path. Use
-it when the joining action needs all of the inputs, which is the usual case.
+it when the joining action needs all of the inputs, which is the usual case. Never point an
+`all` join at a branch that can be skipped — the join becomes unreachable and the workflow
+fails. If a branch is conditional, either switch the join to `any` or give the join the same
+`run_if` as the branch.
 
 `join_strategy: any` runs the action as soon as one parent survives. Use it for alternate paths
 to the same outcome — a paging step reachable from either an on-call lookup or a fallback
