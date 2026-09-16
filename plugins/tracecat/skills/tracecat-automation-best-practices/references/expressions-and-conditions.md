@@ -62,9 +62,51 @@ references a misspelled action ref or an unparseable literal fails the workflow 
 quietly falling through. That asymmetry is why a `run_if` should be a plain readable
 comparison, not a clever expression with several ways to blow up.
 
-**You do not need to reuse conditions.** Putting the same `run_if` on three branches is
-correct and readable — each branch states its own gate where a reviewer reads it. Do not add a
-router `run_python` node whose only job is to emit booleans so the condition is written once:
+**A `run_if` gates everything below it on the chain. Do not repeat it downstream.** A skipped
+task marks its outgoing edges skipped, and a task whose dependency edges are *all* skipped is
+skipped in turn. The skip keeps travelling, so one gate at the top of a chain already covers
+every action under it, and a restated copy is dead weight that becomes a bug the day the two
+copies diverge.
+
+```yaml
+# WRONG - the same gate restated on every link of the chain
+actions:
+  - ref: fetch_alert
+    action: core.http_request
+    run_if: ${{ TRIGGER.enabled }}
+  - ref: enrich_ip
+    action: core.http_request
+    depends_on: [fetch_alert]
+    run_if: ${{ TRIGGER.enabled }}   # dead weight - fetch_alert already skipped this
+  - ref: create_case
+    action: core.cases.create_case
+    depends_on: [enrich_ip]
+    run_if: ${{ TRIGGER.enabled }}   # dead weight
+
+# RIGHT - gate once, at the top
+actions:
+  - ref: fetch_alert
+    action: core.http_request
+    run_if: ${{ TRIGGER.enabled }}
+  - ref: enrich_ip
+    action: core.http_request
+    depends_on: [fetch_alert]
+  - ref: create_case
+    action: core.cases.create_case
+    depends_on: [enrich_ip]
+```
+
+A downstream action earns its own `run_if` only for a **new** condition the chain has not
+checked yet — a delivery step gated on `${{ TRIGGER.delivery_enabled }}`, say. Even then it
+writes only the new condition, never the upstream one AND-ed back in. The other exception is a
+join: a task with several parents is not force-skipped while one parent survives, so it needs
+`join_strategy: any` or a gate of its own — see [graph-shape](graph-shape.md).
+
+**Sibling branches at a fork each state their own gate.** Putting the same `run_if` on three
+branches that hang off the same parent is correct and readable — each branch states its own gate
+where a reviewer reads it. This never applies to actions further down a chain, which the
+upstream gate already skips. Do not add a router `run_python` node whose only job is to emit
+booleans so the condition is written once:
 that trades three legible expressions for one opaque node plus three
 `${{ ACTIONS.router.result.is_x }}` indirections, and it moves branching logic out of the graph.
 

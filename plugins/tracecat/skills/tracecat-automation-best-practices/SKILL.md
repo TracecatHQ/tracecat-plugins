@@ -42,15 +42,16 @@ linear over parallel, and readable over fully connected: **fewer edges is the me
   `ACTIONS.<ref>.result` from any ancestor, not only a direct parent — validation checks that
   the ref exists in the workflow, not that it is a parent. Add an edge when the action must
   *wait*, never to make a value reachable.
+- **Gate once. A `run_if` on an action also skips every action below it on the chain, so never
+  repeat it downstream.** A chain where every action carries the same `TRIGGER.enabled && ...`
+  guard is wrong; only the first action needs it. A downstream action gets its own `run_if` only
+  for a *new* condition, written alone. The exception is a join, and it is a trap: a task with
+  several parents is not force-skipped while one survives, but the default `join_strategy: all`
+  then requires *every* parent to have been visited, so one skipped branch makes the join
+  unreachable and **fails the workflow**. Use `join_strategy: any`, or repeat the branch's
+  condition on the join so it self-skips first.
 - Default to a single chain. Branch only for genuinely independent work worth running
   concurrently, and rejoin only when a later action needs results from more than one branch.
-- **Do not re-assert an upstream condition in `run_if`.** A skip propagates to every task whose
-  dependency edges are all skipped, so one gate covers everything below it on a chain. The
-  exception is a join, and it is a trap: a task with several parents is not force-skipped
-  while one survives, but the default `join_strategy: all` then requires *every* parent to
-  have been visited, so one skipped branch makes the join unreachable and **fails the
-  workflow**. Use `join_strategy: any`, or repeat the branch's condition on the join so it
-  self-skips first.
 - One parent is the norm. More than one means a deliberate join — choose `join_strategy` on
   purpose.
 - Keep ordinary workflows around 20 nodes or fewer and agentic workflows around 6 nodes or
@@ -147,9 +148,12 @@ helper to compensate for a presumed limitation — see
 - Using Python for the *agentic* part — composing or posting an agent's Slack message, or
   making routing/judgment calls in a script. The agent owns message composition, posting (via
   a Slack tool), and judgment; Python owns deterministic data plumbing.
-- Over-connecting the graph: an edge from every producer to every consumer, plus a `run_if` on
-  every branch repeating a condition an ancestor already enforced. Read from ancestors, keep
-  one chain, and gate once (see [graph-shape](references/graph-shape.md)).
+- Over-connecting the graph: an edge from every producer to every consumer. Read from
+  ancestors and keep one chain (see [graph-shape](references/graph-shape.md)).
+- Repeating a `run_if` down a chain, restating a condition an ancestor already enforced. The
+  skip propagates on its own — gate once at the top, and give a downstream action a `run_if`
+  only for a new condition it alone introduces (see
+  [graph-shape](references/graph-shape.md)).
 - Workflow action names are not MCP tool names. Use MCP tools such as `create_workflow` to
   manage workflows, and action names such as `core.http_request` only inside workflow YAML.
 - Inventing `tools.*` action names. Discover actions with `list_actions`, then inspect exact

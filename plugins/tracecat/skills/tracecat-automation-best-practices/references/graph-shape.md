@@ -183,6 +183,47 @@ escalation, because a skipped `triage_alert` skips everything below it.
             return {"unfetched_alert": alert_id}
 ```
 
+**Worked example: eight gates where one belongs.** A chain that enriches an IP, classifies it,
+triages, builds alert content, and creates a case, with every action repeating the same guard
+and the last one AND-ing a delivery flag onto it:
+
+```yaml
+# WRONG - one gate copied down the chain, and a new flag AND-ed onto the copy
+  - ref: enrich_ip
+    run_if: ${{ TRIGGER.analysis_enabled && FN.not(ACTIONS.dedupe.result) }}
+  - ref: map_classification
+    depends_on: [enrich_ip]
+    run_if: ${{ TRIGGER.analysis_enabled && FN.not(ACTIONS.dedupe.result) }}   # dead weight
+  - ref: triage_alert
+    depends_on: [map_classification]
+    run_if: ${{ TRIGGER.analysis_enabled && FN.not(ACTIONS.dedupe.result) }}   # dead weight
+  - ref: create_case
+    depends_on: [triage_alert]
+    run_if: >-
+      ${{ TRIGGER.analysis_enabled && FN.not(ACTIONS.dedupe.result)
+      && TRIGGER.delivery_enabled }}
+```
+
+```yaml
+# RIGHT - the gate is stated once, and the delivery flag is a new condition stated alone
+  - ref: enrich_ip
+    run_if: ${{ TRIGGER.analysis_enabled && FN.not(ACTIONS.dedupe.result) }}
+  - ref: map_classification
+    depends_on: [enrich_ip]
+  - ref: triage_alert
+    depends_on: [map_classification]
+  - ref: create_case
+    depends_on: [triage_alert]
+    run_if: ${{ TRIGGER.delivery_enabled }}   # new condition only, never the upstream one again
+```
+
+If that chain contains an any-join — a `select_enrichment` fed by a resolved and a fallback
+path — the join is the one place the upstream condition may legitimately reappear, because
+`join_strategy: any` fires it even when only some parents survived.
+
+Ask: is this a new condition, or one an ancestor already checked? Only the former gets a
+`run_if`. Only a join gets a repeated one.
+
 ## When a join is correct
 
 A join is correct when a later action genuinely needs results from work that ran on separate
