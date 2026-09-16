@@ -1,0 +1,25 @@
+plugins/tracecat/skills/tracecat-automation-best-practices/references/expressions-and-conditions.md
+  s_2294cee0e4d7c7::t_138c65186c4504 65-107
+  s_2294cee0e4d7c7::t_9d09ea5ee01754 108-109
+plugins/tracecat/skills/tracecat-automation-best-practices/references/graph-shape.md
+  s_2294cee0e4d7c7::t_9d09ea5ee01754 202-204
+  s_2294cee0e4d7c7::t_138c65186c4504 186-201,205-226
+plugins/tracecat/skills/tracecat-automation-best-practices/SKILL.md
+  s_2294cee0e4d7c7::t_138c65186c4504 45-52,151-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e7b5b03c1ab783e3c9447b9f56067de91c839b86",
+  "prompts": {},
+  "sessions": {
+    "s_2294cee0e4d7c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7abe29da-c543-44ee-86ea-c47393a0f0bd",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
