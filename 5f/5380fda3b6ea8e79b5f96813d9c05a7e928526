@@ -1,0 +1,38 @@
+plugins/tracecat/skills/tracecat-manage-skills/SKILL.md
+  s_a2fa1c36407f85::t_2d493b0c449652 82-85
+plugins/tracecat/skills/tracecat-automation-best-practices/references/graph-shape.md
+  s_a2fa1c36407f85::t_10bc161ae1f4de 251-252
+  s_a2fa1c36407f85::t_024137e4d5302a 155-156
+plugins/tracecat/skills/tracecat-slackbot-best-practices/SKILL.md
+  s_a2fa1c36407f85::t_cea660c01d38df 21
+plugins/tracecat/skills/tracecat-automation-best-practices/references/agent-presets.md
+  s_a2fa1c36407f85::t_4cae6a230b65a7 7-9,11-12
+  s_a2fa1c36407f85::t_b4400fbeca7c32 16-19
+  s_a2fa1c36407f85::t_3f6ec0ff4b2f98 67-68
+  s_a2fa1c36407f85::t_47bcb87e5ef007 37-42,44-47,51-53,55-60
+plugins/tracecat/skills/tracecat-workspace-chat/references/tool-mapping.md
+  s_a2fa1c36407f85::t_a2b984fed1c39c 67-69
+plugins/tracecat/skills/tracecat-mcp/references/platform-concepts.md
+  s_a2fa1c36407f85::t_d04faa18b8ab04 19
+plugins/tracecat/skills/tracecat-manage-skills/references/troubleshooting.md
+  s_a2fa1c36407f85::t_d1bc3d3284701e 41
+plugins/tracecat/skills/tracecat-automation-best-practices/SKILL.md
+  s_a2fa1c36407f85::t_201cd05e27034a 112-132
+  s_a2fa1c36407f85::t_26ecff0e2ca577 193-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5f5380fda3b6ea8e79b5f96813d9c05a7e928526",
+  "prompts": {},
+  "sessions": {
+    "s_a2fa1c36407f85": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abaf6dac-3ba4-47cb-a03f-254a5b04d4f4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
