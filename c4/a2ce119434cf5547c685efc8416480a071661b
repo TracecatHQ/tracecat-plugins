@@ -1,0 +1,53 @@
+plugins/tracecat/skills/tracecat-mcp/references/platform-concepts.md
+  s_a2fa1c36407f85::t_2c699a4a68601f 19-20
+plugins/tracecat/skills/tracecat-automation-best-practices/references/agent-presets.md
+  s_a2fa1c36407f85::t_dc5ba1ce86c554 14-68
+  s_a2fa1c36407f85::t_d7c897828ec6c6 90-93
+plugins/tracecat/skills/tracecat-automation-best-practices/references/agent-outputs.md
+  s_a2fa1c36407f85::t_d9b1a8a38d5d2d 3-4
+plugins/tracecat/skills/tracecat-slackbot-best-practices/SKILL.md
+  s_a2fa1c36407f85::t_f028f7cd3dc3fb 21
+plugins/tracecat/skills/tracecat-automation-best-practices/references/graph-shape.md
+  s_a2fa1c36407f85::t_a4da1ea389a00d 239,245,251-253
+  s_a2fa1c36407f85::t_3a47bd47cba5d0 155-158
+  s_bd663eca5bf4c3::t_cf3905399274fd 75-76,138-139,254
+plugins/tracecat/skills/tracecat-workspace-chat/references/tool-mapping.md
+  s_a2fa1c36407f85::t_b9d65b7a3140fd 66-68
+plugins/tracecat/skills/tracecat-manage-skills/SKILL.md
+  s_a2fa1c36407f85::t_9756dcf56fef26 51-82
+plugins/tracecat/skills/tracecat-automation-best-practices/SKILL.md
+  s_a2fa1c36407f85::t_eede468fbff3f1 71-73
+  s_a2fa1c36407f85::t_463c23d84ba3e3 101-117,120-125
+  s_a2fa1c36407f85::t_8d0bdfa77d2db1 185-190
+  s_a2fa1c36407f85::t_7c46bbddc386a7 126
+plugins/tracecat/.claude-plugin/plugin.json
+  s_a2fa1c36407f85::t_bb9b0c0050d263 3
+plugins/tracecat/.codex-plugin/plugin.json
+  s_a2fa1c36407f85::t_b3b3dfaa81d434 3
+plugins/tracecat/plugin.json
+  s_a2fa1c36407f85::t_2037b2bc5e016c 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c4a2ce119434cf5547c685efc8416480a071661b",
+  "prompts": {},
+  "sessions": {
+    "s_a2fa1c36407f85": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abaf6dac-3ba4-47cb-a03f-254a5b04d4f4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    },
+    "s_bd663eca5bf4c3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ab7d-e934-7f43-af23-872482c78de3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
