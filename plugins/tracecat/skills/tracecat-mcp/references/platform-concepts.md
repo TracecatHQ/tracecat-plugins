@@ -16,6 +16,8 @@ A workspace skill has a mutable draft and immutable published versions. Only pub
 
 Agent presets combine instructions, model configuration, allowed actions or namespaces, integrations, approvals, and published skills. Inspect the preset authoring context before creating or changing one.
 
+An agent's tools live on the preset's `actions` allowlist or on an attached skill's `metadata.tools` frontmatter — prefer a skill when the tools group naturally and several agents reuse them — and never on an `ai.preset_agent` workflow node, whose `actions` argument replaces that whole set for a single run.
+
 ## Tables and cases
 
 Tables are workspace data stores with typed columns and row APIs. Cases add security-case semantics, events, tags, fields, dropdown definitions, tasks, and workflow triggers. Definition IDs and per-case values are separate objects; discover definitions before assigning values.

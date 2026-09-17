@@ -48,6 +48,38 @@ Verify by re-fetching, because no tool reads a skill's files back and no diff AP
 
 This is routine, reversible work. Every published version is immutable and still bound-able, so a bad push is undone by publishing a corrected tree and re-binding. Do it rather than narrating risk; reserve caution for operations that actually cannot be undone.
 
+## Declaring the skill's tools
+
+A skill carries its own tools. Declare them in the root `SKILL.md` frontmatter under
+`metadata.tools`, as registry action names or `mcp.<slug>` / `mcp.<slug>.<tool>` entries, up to
+64 per skill:
+
+```yaml
+---
+name: slack-triage
+description: Post and thread triage updates in Slack.
+metadata:
+  tools:
+    - tools.slack.post_message
+    - tools.slack.list_replies
+---
+```
+
+Every preset the skill is attached to receives those tools on top of its own `actions`
+allowlist. They are granted as soon as the preset resolves, whether or not the model opens the
+skill; only the skill's instructions load on demand.
+
+Prefer this over listing the same tools on each preset's `actions` when the tools group
+naturally and several agents reuse them — one edit and a re-publish then updates every consuming
+preset. Keep a tool on the preset's `actions` when it is specific to that one agent.
+
+One caveat: a preset's `namespaces` filter applies over the union, and silently blocks skill
+tools outside it. After attaching a skill to a namespace-restricted preset, check
+`tool_policy.blocked_tools` on `get_agent_preset`.
+
+Changing `metadata.tools` changes what agents can execute, so it follows the same three calls as
+any other fix: `update_skill`, `publish_skill`, then `update_agent_preset` to re-pin the binding.
+
 ## Size
 
 The whole tree travels as one argument, and base64 inflates bytes by roughly a third. Keep skill directories small and text-only.

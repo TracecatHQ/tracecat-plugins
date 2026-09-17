@@ -1,6 +1,7 @@
 # Agent outputs and structured output types
 
-**Default to no `output_type`. Let the agent call the tool.**
+**Set an `output_type` only when the user explicitly asks for structured output. Otherwise leave
+it unset and let the agent call the tool.**
 
 An agent whose job is to communicate — post to Slack, post to Teams, answer in chatops, open or
 comment on a case — should be handed that tool and told to use it. The side effect *is* the

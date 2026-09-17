@@ -63,6 +63,9 @@ through workflow JSON Patch.
 - `ai.agent.update_preset` uses `slug` to identify the current preset, `new_slug` to rename it,
   and `mcp_integrations` rather than `mcp_integration_ids`. `mcp_integrations` is a list of
   workspace MCP integration IDs.
+- `ai.agent.update_preset` is where an agent's tools are set, through its `actions` field. Tools
+  belong there or on an attached skill's `metadata.tools`, never on an `ai.preset_agent`
+  workflow node.
 - `get_agent_preset_authoring_context` has no full equivalent. Use
   `core.workflow.get_authoring_context` for enabled models, action schemas, variables, and secret
   hints.

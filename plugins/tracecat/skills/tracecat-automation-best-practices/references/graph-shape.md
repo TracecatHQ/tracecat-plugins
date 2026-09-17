@@ -72,8 +72,8 @@ actions:
       user_prompt: Investigate this alert and summarize what an analyst should do next.
       instructions: You are a SOC analyst. Be specific and cite the enrichment you used.
       model:
-        name: claude-sonnet-4-5
-        provider: anthropic
+        model_name: claude-sonnet-4-5
+        model_provider: anthropic
 
   - ref: create_case
     action: core.cases.create_case
@@ -135,8 +135,8 @@ actions:
       user_prompt: Investigate this alert and summarize what an analyst should do next.
       instructions: You are a SOC analyst. Be specific and cite the enrichment you used.
       model:
-        name: claude-sonnet-4-5
-        provider: anthropic
+        model_name: claude-sonnet-4-5
+        model_provider: anthropic
 
   - ref: create_case
     action: core.cases.create_case
@@ -151,6 +151,10 @@ actions:
 
 Nothing about execution changed except that it became legible. `create_case` still runs only on
 escalation, because a skipped `triage_alert` skips everything below it.
+
+Both versions use an inline `ai.agent`, which is right when the prompt, model, and tools belong
+to this one workflow. Reusable behavior belongs on a preset called with `ai.preset_agent` — see
+[agent-presets](agent-presets.md).
 
 ## How skips actually travel
 
@@ -232,20 +236,21 @@ different systems, not two halves of one sequential thought.
 
 ```yaml
   - ref: triage_alert
-    action: ai.agent
+    action: ai.preset_agent
     depends_on:
       - enrich_ip
       - fetch_asset_owner
     join_strategy: all
     args:
+      preset: soc-triage
       user_prompt: |
         Reputation: ${{ ACTIONS.enrich_ip.result.data }}
         Asset owner: ${{ ACTIONS.fetch_asset_owner.result.data }}
-      instructions: You are a SOC analyst. Recommend a next action and name the owner to page.
-      model:
-        name: claude-sonnet-4-5
-        provider: anthropic
 ```
+
+An `ai.preset_agent` node is just `preset` and `user_prompt`. The model, instructions, and
+tools all live on the preset — see
+[agent-presets](agent-presets.md).
 
 `join_strategy: all` is the default: every parent must have completed on a surviving path. Use
 it when the joining action needs all of the inputs, which is the usual case. Never point an
