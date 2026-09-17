@@ -18,7 +18,7 @@ Build Slack bots with `ai.agent` or `ai.preset_agent`.
 - Use inline `ai.agent` when the Slack behavior is specific to one workflow and should travel with that workflow.
 - Use `ai.preset_agent` when the bot persona, tools, and instructions should be reusable across workflows.
 - Give the agent Slack send/post message tools plus list/read message or reply tools when it needs thread context.
-- Declare those Slack tools on the preset's `actions` allowlist, or on a shared Slack skill's `metadata.tools` when several bots use the same set. Do not put them on the workflow node: an `ai.preset_agent` node takes `preset` and `user_prompt` (plus an optional `instructions` append), and its `actions` argument replaces the preset's and its skills' whole tool set for that run. Keep it out of a shipping workflow.
+- Declare those Slack tools on the preset's `actions` allowlist, or on a shared Slack skill's `metadata.tools` when several bots use the same set, so the bot behaves the same in Workspace Chat and in every workflow that calls it. An `ai.preset_agent` node then needs only `preset` and `user_prompt` (plus an optional `instructions` append); its `actions` argument replaces the preset's and its skills' registry tools for that run, which fits a test or an eval rather than a shipping workflow.
 - Fetch the Slack thread before invoking the agent, and tell the agent that thread context is required input.
 - Post visible replies back to the original channel and thread. Do not answer only in the agent transcript.
 

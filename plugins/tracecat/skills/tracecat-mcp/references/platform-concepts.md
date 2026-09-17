@@ -16,7 +16,7 @@ A workspace skill has a mutable draft and immutable published versions. Only pub
 
 Agent presets combine instructions, model configuration, allowed actions or namespaces, integrations, approvals, and published skills. Inspect the preset authoring context before creating or changing one.
 
-An agent's tools live on the preset's `actions` allowlist or on an attached skill's `metadata.tools` frontmatter — prefer a skill when the tools group naturally and several agents reuse them — and never on an `ai.preset_agent` workflow node, whose `actions` argument replaces that whole set for a single run.
+An agent's tools normally live on the preset's `actions` allowlist or on an attached skill's `metadata.tools` frontmatter — prefer a skill when the tools group naturally and several agents reuse them — so the agent has the same tools in Workspace Chat and in every workflow that calls it. The `actions` argument on an `ai.preset_agent` workflow node replaces the preset's and its skills' registry tools for that run rather than adding to them, which suits trying a preset with a different tool set in a test or an eval more than it suits a shipping workflow.
 
 ## Tables and cases
 

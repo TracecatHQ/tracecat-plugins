@@ -38,7 +38,7 @@ Preset skill bindings are pinned to a version at write time. `publish_skill` mov
 
 ## The skill's tools never reach the agent
 
-A preset's `namespaces` filter applies over the union of its `actions` and every attached skill's `metadata.tools`, and silently drops anything outside it. Read `get_agent_preset`: granted tools appear as a flat list in `tool_policy.actions`, and filtered ones in `tool_policy.blocked_tools`. Widen `namespaces` or move the tool into an allowed namespace.
+A preset's `namespaces` filter applies to the registry tools in the union of its `actions` and every attached skill's `metadata.tools`, and silently drops the ones outside it. Read `get_agent_preset`: granted tools appear as a flat list in `tool_policy.actions`, and filtered ones in `tool_policy.blocked_tools`. Widen `namespaces` or move the tool into an allowed namespace. MCP tools a skill declares (`mcp.<slug>` / `mcp.<slug>.<tool>`) are not filtered by `namespaces` and do not appear in `blocked_tools`, so when one of those is missing look instead at the preset's `mcp_integration_ids`.
 
 ## The write looked like it failed but actually landed
 

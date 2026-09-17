@@ -79,9 +79,10 @@ Prefer this over listing the same tools on each preset's `actions` when the tool
 naturally and several agents reuse them — one edit and a re-publish then updates every consuming
 preset. Keep a tool on the preset's `actions` when it is specific to that one agent.
 
-One caveat: a preset's `namespaces` filter applies over the union, and silently blocks skill
-tools outside it. After attaching a skill to a namespace-restricted preset, check
-`tool_policy.blocked_tools` on `get_agent_preset`.
+One caveat: a preset's `namespaces` filter applies to the registry tools in the union and
+silently blocks the ones outside it. After attaching a skill to a namespace-restricted preset,
+check `tool_policy.blocked_tools` on `get_agent_preset`. MCP tools a skill declares
+(`mcp.<slug>` / `mcp.<slug>.<tool>`) are not filtered by `namespaces` and do not appear there.
 
 Changing `metadata.tools` changes what agents can execute, so it follows the same three steps as
 any other fix: replace the draft, `publish_skill`, then `update_agent_preset` to re-pin the

@@ -4,18 +4,19 @@ Before creating or updating presets, call `get_agent_preset_authoring_context` a
 `list_integrations`. Check workspace model credentials, attachable MCP integrations, output
 type options, variables, and available tools.
 
-Give presets only the tools they need. Encode routing, table names, output style, and
-production action rules directly in the preset instructions; the agent reads its own
-instructions, not repo files.
+Give a preset the tools its job actually calls for, and trust it with them. Encode routing,
+table names, output style, and production action rules directly in the preset instructions;
+the agent reads its own instructions, not repo files.
 
-Prefer a preset when reusable behavior already exists. Use inline `ai.agent` only when the
-prompt should live with one workflow and should not be shared.
+Prefer a preset when reusable behavior already exists. Inline `ai.agent` fits when the prompt
+should live with one workflow and is not worth sharing.
 
 ## Where tools live
 
-**Tools belong on the preset's `actions` allowlist or on a skill's `metadata.tools`.** Prefer a
-skill when the tools group naturally and more than one agent reuses them; put one-off tools on
-the preset. A skill declares them in its `SKILL.md` frontmatter:
+An agent's tools normally live on the preset's `actions` allowlist, or on an attached skill's
+`metadata.tools` when the tools group naturally and more than one agent reuses them; one-off
+tools usually stay on the preset. That way the agent has the same tools in Workspace Chat and
+in every workflow that calls it. A skill declares them in its `SKILL.md` frontmatter:
 
 ```yaml
 ---
@@ -33,32 +34,38 @@ The effective tool set is the union: the preset's `actions` plus every attached 
 the model ever opens the skill; only the skill's instructions load on demand. A skill may
 declare up to 64 tools, named as registry action names or as `mcp.<slug>` / `mcp.<slug>.<tool>`.
 
-**The `namespaces` trap.** The union is then filtered by the preset's `namespaces`. A namespace
-filter silently drops skill tools that fall outside it — the tools are declared, attached, and
-absent at runtime. They appear under `tool_policy.blocked_tools` on `get_agent_preset`, so read
-that after attaching a skill to a namespace-restricted preset.
+**The `namespaces` trap.** The preset's `namespaces` filter then applies to the registry tools
+in that union, and silently drops the ones outside it — declared, attached, and absent at
+runtime. They appear under `tool_policy.blocked_tools` on `get_agent_preset`, so read that
+after attaching a skill to a namespace-restricted preset. MCP tools a skill declares
+(`mcp.<slug>` / `mcp.<slug>.<tool>`) are not filtered by `namespaces` and do not show up in
+`blocked_tools`.
 
-A preset owns its own tools for a second reason: presets are also Workspace Chat copilots. The
-same preset must answer a plain typed question, not only a workflow-shaped payload, so anything
-it needs to do the job has to travel with the preset rather than with a call site.
+Preset-owned tools help for a second reason: presets are also Workspace Chat copilots. The
+same preset is expected to answer a plain typed question, not only a workflow-shaped payload,
+so anything it needs to do the job is better travelling with the preset than with one call
+site.
 
 ## Calling a preset from a workflow
 
-An `ai.preset_agent` node carries `preset` and `user_prompt`, plus at most an `instructions`
-append, which is concatenated after the preset's own instructions for run-specific context.
+An `ai.preset_agent` node usually carries just `preset` and `user_prompt`, plus an optional
+`instructions` append, which is concatenated after the preset's own instructions for
+run-specific context.
 
-The node's `actions` argument is for ad hoc testing and evals — trying a preset with a
-different tool set inside one workflow. It **replaces** the preset's and its skills' entire
-tool set for that run; it does not add to it. An empty `actions: []` at the call site is a
-no-op and changes nothing. Do not leave a non-empty `actions` in a workflow that ships; move
-those tools onto the preset or a skill instead.
+The node's `actions` argument **replaces** the preset's and its skills' registry tool list for
+that run rather than adding to it. MCP tools from the preset and its skills stay attached, and
+an empty `actions: []` at the call site is ignored. That makes it a good fit for trying a
+preset with a different tool set in a test or an eval. In a workflow that ships it is usually
+the wrong place: the list also drops the registry tools the preset's skills contribute, so
+prefer moving those tools onto the preset or a skill.
 
 ## Preset fields
 
 - `instructions` — behavior, contracts, routing, tone, and rules.
 - Model selection — see below.
 - `actions` — the allowed registry actions.
-- `namespaces` — the namespace filter applied over the whole effective tool set.
+- `namespaces` — a namespace filter over the registry tools in the effective set; MCP tools
+  are unaffected.
 - `skills` — published skill bindings, each contributing its `metadata.tools`.
 - `mcp_integration_ids` — attached workspace MCP integrations.
 - `tool_approvals` — per-tool human approval (Enterprise); the run pauses until a human decides.

@@ -152,8 +152,8 @@ actions:
 Nothing about execution changed except that it became legible. `create_case` still runs only on
 escalation, because a skipped `triage_alert` skips everything below it.
 
-Both versions use an inline `ai.agent`, which is right when the prompt, model, and tools belong
-to this one workflow. Reusable behavior belongs on a preset called with `ai.preset_agent` — see
+Both versions use an inline `ai.agent`, which fits when the prompt, model, and tools belong to
+this one workflow. Reusable behavior is better on a preset called with `ai.preset_agent` — see
 [agent-presets](agent-presets.md).
 
 ## How skips actually travel
@@ -248,9 +248,8 @@ different systems, not two halves of one sequential thought.
         Asset owner: ${{ ACTIONS.fetch_asset_owner.result.data }}
 ```
 
-An `ai.preset_agent` node is just `preset` and `user_prompt`. The model, instructions, and
-tools all live on the preset — see
-[agent-presets](agent-presets.md).
+Here the node is just `preset` and `user_prompt`, because the model, instructions, and tools
+already live on the preset — see [agent-presets](agent-presets.md).
 
 `join_strategy: all` is the default: every parent must have completed on a surviving path. Use
 it when the joining action needs all of the inputs, which is the usual case. Never point an
