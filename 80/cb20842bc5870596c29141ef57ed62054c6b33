@@ -1,0 +1,32 @@
+plugins/tracecat/skills/tracecat-mcp/references/tool-routing.md
+  s_a2fa1c36407f85::t_f96a41872637b2 17-18
+plugins/tracecat/skills/tracecat-manage-skills/SKILL.md
+  s_a2fa1c36407f85::t_4362ace13a0070 8,10,12,14,16,18-19,22,25-39,41,45,47,53
+  s_a2fa1c36407f85::t_bd6db6500ac4a5 108,112-113
+  s_a2fa1c36407f85::t_028435b4bee2bf 86-89,93,95,97,101-104,107
+plugins/tracecat/skills/tracecat-manage-skills/references/troubleshooting.md
+  s_a2fa1c36407f85::t_d56ed0568bfa76 5,9,13,15,17-21,25-29,37-41,45,47,49
+plugins/tracecat/skills/tracecat-manage-skills/scripts/upload_skill_files.py
+  s_a2fa1c36407f85::t_72e6e5e6a7f832 389,393-397,399-400
+  s_a2fa1c36407f85::t_71fcc072e6b864 427-431
+  s_a2fa1c36407f85::t_0b9090b0f25512 224-240
+  s_a2fa1c36407f85::t_47ea1e00655311 2-15
+plugins/tracecat/skills/tracecat-manage-skills/references/upload-contract.md
+  s_a2fa1c36407f85::t_c99af13d102e0c 3,5,7-30,34-36,40-41,43-57,59-67,73-75,77,79-81,86-88,92,94,100,104,121,127-132,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "80cb20842bc5870596c29141ef57ed62054c6b33",
+  "prompts": {},
+  "sessions": {
+    "s_a2fa1c36407f85": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abaf6dac-3ba4-47cb-a03f-254a5b04d4f4",
+        "model": "unknown"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
