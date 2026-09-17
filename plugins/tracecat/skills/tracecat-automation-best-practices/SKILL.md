@@ -68,9 +68,9 @@ readability — **the fewest actions and the least code that does the job.**
 
 - **Agentic work → use an agent** (`ai.agent` / `ai.preset_agent`). Anything needing
   judgment, investigation, routing, enrichment choices, summarization, composing a message,
-  or posting to Slack. Give the agent the tools and trust it. Prefer agents, prompts, and
-  skills — they carry the creative thinking with far fewer moving parts than a graph of
-  deterministic nodes.
+  or posting to Slack. Grant the tools on the preset's `actions` allowlist or on a skill's
+  `metadata.tools`, then trust the agent with them. Prefer agents, prompts, and skills — they
+  carry the creative thinking with far fewer moving parts than a graph of deterministic nodes.
 - **Deterministic data plumbing → use Python** (`core.script.run_python`). Transforming,
   normalizing, redacting, loading or upserting rows into tables, forwarding data between
   systems. This is exactly what Python is for — it is **not** a smell. One clear `run_python`
@@ -98,18 +98,38 @@ so the workflow — not the agent — owns the first durable record of the event
 
 A deterministic node earns its place by being thin, direct, and easy to audit, and by doing
 work the agent should not own: redact secrets before the agent sees data, normalize schema,
-upsert the event row, enforce hard approval or authorization boundaries, guard expensive
-agent runs with a dedupe check, prepare bounded batches, or checkpoint durable state. Keep
-judgment, routing, enrichment, message composition, soft approval decisions, and final
-notification behavior in the agent. When an approval question itself needs judgment, let the
-agent decide or draft the request, and reserve deterministic gates for explicit safety or
-authorization boundaries.
+upsert the event row, guard expensive agent runs with a dedupe check, prepare bounded
+batches, or checkpoint durable state. Keep judgment, routing, enrichment, message
+composition, soft approval decisions, and final notification behavior in the agent. When an
+approval question itself needs judgment, let the agent decide or draft the request.
 
-Favor one well-instructed agent or reusable preset over many small deterministic nodes. Put
-output contracts, Slack style, dedupe rules, tenant boundaries, tool permissions, and
-permitted side effects directly in the preset instructions — the agent reads those, not repo
-files. When the agent needs a tool, grant it the narrow tool directly rather than wrapping
-the same call in a workflow action.
+Two different mechanisms cover risk, and they do not compete with preset-owned tools. Use a
+deterministic gate for an irreversible external effect the workflow itself performs — the
+graph decides whether that node runs at all. Use per-tool `tool_approvals` on the preset for
+a risky tool the agent holds: the agent keeps the tool, and the run pauses for a human before
+that specific call goes through.
+
+Favor one well-instructed agent or reusable preset over many small deterministic nodes. An
+agent's tools normally live on the preset's `actions` allowlist, or on an attached skill's
+`metadata.tools` when several agents share the group. That way the agent has the same tools
+in Workspace Chat and in every workflow that calls it. Instructions carry behavior rather
+than permissions: output contracts, Slack style, dedupe rules, tenant boundaries, and
+permitted side effects go in the preset instructions, which the agent reads instead of repo
+files. When the agent needs a tool, granting the narrow tool there usually beats wrapping the
+same call in a workflow action.
+
+An `ai.preset_agent` node usually carries just `preset` and `user_prompt`, plus an optional
+`instructions` append for run-specific context. Its `actions` argument **replaces** the
+preset's and its skills' registry tools for that run rather than adding to them — MCP tools
+stay attached, and an empty list is ignored — so it suits trying a preset with a different
+tool set in a test or an eval. A list left there in a shipping workflow also drops the
+registry tools the preset's skills contribute, which is rarely what the author wanted.
+
+Write agent instructions as goals, context, and reasons rather than prohibitions. A blanket
+rule can cancel a tool the agent was given: one caller appended "Use only supplied evidence"
+and the agent skipped the single policy lookup it had been granted a tool for. Reserve hard
+rules for irreversible or outward-facing actions, and put `tool_approvals` or a deterministic
+gate behind those instead of relying on the wording of a prompt.
 
 A preset's runtime has more capability than `list_actions` shows: a real shell and file tools,
 Python, `curl`, `jq`, and DuckDB. Inspect the preset/runtime context before adding a workflow
@@ -169,6 +189,11 @@ helper to compensate for a presumed limitation — see
   [tables](references/tables.md)).
 - Granting `core.http_request` to an agent without explicit user approval of broad network
   access.
-- Defining an agent `output_type` nothing downstream branches on. Default to none, give the
-  agent the tool, and let the side effect be the output; ask the user first (see
+- Shipping a workflow with `actions:` on an `ai.preset_agent` node. It replaces the preset's
+  and its skills' registry tools for that run instead of adding to them, so the skills' tools
+  quietly disappear. Outside a test or an eval, put the tools on the preset or a skill and
+  keep the node to `preset` + `user_prompt`.
+- Defining an agent `output_type` when the user did not ask for structured output. Default to
+  none, give the agent the tool, and let the side effect be the output; add one only on an
+  explicit request or when a downstream step branches on the value (see
   [agent-outputs](references/agent-outputs.md)).

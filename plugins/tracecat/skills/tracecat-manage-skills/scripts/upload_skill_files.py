@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Build and verify base64 skill upload payloads for Tracecat MCP.
+"""Build skill upload metadata and payloads for Tracecat MCP.
 
-`upload_skill` and `update_skill` accept the whole skill tree as one
-`files` argument, so the encoded bytes travel as tool arguments. This helper
-does not avoid that. It removes the parts an agent should never do by hand:
-walking the directory safely, refusing symlinks, enforcing a root `SKILL.md`,
-computing digests, base64-encoding every file, and proving the encoding
-round-trips before anything is sent.
+The current server takes a staged upload: `prepare_skill_upload` receives file
+metadata only, the bytes go to the returned URLs over plain HTTP, and
+`complete_skill_upload` attaches them. The `metadata` subcommand emits exactly
+that metadata array.
+
+The `manifest` and `verify` subcommands build and round-trip the older inline
+base64 `files` array. Keep them only for a deployment that still exposes the
+retired `upload_skill` / `update_skill` tools.
+
+Every subcommand shares the parts an agent should never do by hand: walking the
+directory safely, refusing symlinks, enforcing a root `SKILL.md`, and computing
+digests.
 """
 
 from __future__ import annotations
@@ -215,6 +221,23 @@ def upload_files_payload(files: Sequence[LocalSkillFile]) -> list[dict[str, str]
     return entries
 
 
+def upload_metadata_payload(files: Sequence[LocalSkillFile]) -> list[dict[str, object]]:
+    """Return the exact `files` array accepted by prepare_skill_upload.
+
+    Metadata only: no file contents and no base64.
+    """
+
+    return [
+        {
+            "path": file.path,
+            "sha256": file.sha256,
+            "size_bytes": file.size_bytes,
+            "content_type": file.content_type,
+        }
+        for file in files
+    ]
+
+
 def manifest_payload(files: Sequence[LocalSkillFile]) -> dict[str, object]:
     """Return the upload payload plus its integrity summary."""
 
@@ -363,12 +386,18 @@ def _print_manifest_summary(output_path: Path, payload: Mapping[str, object]) ->
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build and verify base64 skill upload payloads for Tracecat MCP.",
+        description="Build skill upload metadata and payloads for Tracecat MCP.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    metadata_parser = subparsers.add_parser(
+        "metadata", help="emit the files metadata array for prepare_skill_upload"
+    )
+    _ = metadata_parser.add_argument("root", type=Path, help="local skill directory")
+
     manifest_parser = subparsers.add_parser(
-        "manifest", help="emit the files array for upload_skill or update_skill"
+        "manifest",
+        help="emit the legacy inline base64 files array (retired server tools)",
     )
     _ = manifest_parser.add_argument("root", type=Path, help="local skill directory")
     _ = manifest_parser.add_argument(
@@ -395,6 +424,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv, namespace=CliArguments())
     try:
+        if args.command == "metadata":
+            _, files = discover_skill_files(args.root)
+            json.dump(upload_metadata_payload(files), sys.stdout, indent=2)
+            print()
+            return 0
         if args.command == "manifest":
             _, files = discover_skill_files(args.root)
             payload = manifest_payload(files)
