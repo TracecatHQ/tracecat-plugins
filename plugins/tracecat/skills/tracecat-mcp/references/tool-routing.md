@@ -7,6 +7,7 @@ Load the smallest tool family that satisfies the request.
 | Find a workspace | `list_workspaces` | Reuse the exact workspace ID everywhere else |
 | Find or inspect workflows | `list_workflows`, `get_workflow` | Use `edit_workflow` for focused changes |
 | Author workflow actions | `get_workflow_authoring_context` | `validate_workflow` before publish or run |
+| Add or edit `run_if`, `depends_on`, or joins | `get_workflow_graph` | Read each action's `gated_by` before writing a condition |
 | Discover an integration action | `list_actions`, `get_action_context` | Use the returned schema exactly |
 | Debug a workflow run | `list_workflow_executions` | `get_workflow_execution` for structured failure details |
 | Manage webhook or case triggers | `get_webhook`, `get_case_trigger` | Use the matching update tool after reading current state |

@@ -19,6 +19,13 @@ Prefer targeted `edit_workflow` patches over replacing full YAML.
   patch.
 - When adding or renaming actions, update the action `ref`, every dependent `depends_on` edge,
   and the matching layout action `ref` in the same edit.
+- Before adding or editing a `run_if`, `depends_on`, or `join_strategy`, call
+  `get_workflow_graph`. It returns a Mermaid flowchart of refs, action types, loops, joins, and
+  conditions (no `args`), plus each action's `gated_by` refs: upstream actions whose `run_if`
+  already guards it. Write only the new condition; never AND or OR a `gated_by` condition back
+  in, except on a join that needs it (see [graph-shape](graph-shape.md)).
+- Do not hand-place nodes. Adding actions or changing any `depends_on` re-runs the canvas
+  auto-layout, and supplied positions for that edit are ignored.
 - JSON Patch operations apply in order. RFC 6902 array semantics: `/-` appends, and indexes
   shift after `add`, `remove`, and `move`.
 - Use `update_workflow(definition_yaml=..., update_mode="replace")` only when a targeted patch
