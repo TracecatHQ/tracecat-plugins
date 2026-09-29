@@ -22,7 +22,9 @@ For an external Tracecat MCP connection, start from live context rather than gue
 2. Read `tracecat://platform/dsl-reference` when DSL syntax or examples are needed.
 3. Use `get_workflow_authoring_context` for action schemas, variables, and secrets.
 4. For existing workflows, use `get_workflow`, then targeted `edit_workflow` patches — see
-   [workflow-editing](references/workflow-editing.md).
+   [workflow-editing](references/workflow-editing.md). Before adding or editing any `run_if`,
+   `depends_on`, or `join_strategy`, call `get_workflow_graph` where the host exposes it and
+   read every upstream action and its `gated_by` list first.
 5. Validate with `validate_workflow`, run a draft or published execution when appropriate,
    then inspect failures with `list_workflow_executions` and `get_workflow_execution`.
 
@@ -54,9 +56,12 @@ linear over parallel, and readable over fully connected: **fewer edges is the me
   concurrently, and rejoin only when a later action needs results from more than one branch.
 - One parent is the norm. More than one means a deliberate join — choose `join_strategy` on
   purpose.
+- Keep each `run_if` short: one readable comparison for the one new condition. A long
+  `&&`/`||` chain usually restates upstream gates or belongs in an earlier transform.
 - Keep ordinary workflows around 20 nodes or fewer and agentic workflows around 6 nodes or
-  fewer. Prefer readable left-to-right or top-to-bottom flows, human-readable refs, and layout
-  refs aligned with definition refs.
+  fewer. Prefer readable top-to-bottom flows ordered the way the process reads, and
+  human-readable refs. Tracecat MCP auto-formats the canvas when actions or edges change, so
+  omit `layout` rather than hand-placing nodes.
 
 See [graph-shape](references/graph-shape.md) for a worked over-connected rewrite, join
 strategies, error edges, and why scatter is not branching.
