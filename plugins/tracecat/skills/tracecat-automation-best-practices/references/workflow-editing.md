@@ -23,7 +23,9 @@ Prefer targeted `edit_workflow` patches over replacing full YAML.
   `get_workflow_graph`. It returns a Mermaid flowchart of refs, action types, loops, joins, and
   conditions (no `args`), plus each action's `gated_by` refs: upstream actions whose `run_if`
   already guards it. Write only the new condition; never AND or OR a `gated_by` condition back
-  in, except on a join that needs it (see [graph-shape](graph-shape.md)).
+  in, except on an `all` join over a conditional branch (see [graph-shape](graph-shape.md)).
+  An `any` join lists only conditions on every path into it: one that guards just some of its
+  parents is absent, so put it in the join's own `run_if` if the join needs it.
 - Do not hand-place nodes. Adding actions or changing any `depends_on` re-runs the canvas
   auto-layout, and supplied positions for that edit are ignored.
 - JSON Patch operations apply in order. RFC 6902 array semantics: `/-` appends, and indexes
