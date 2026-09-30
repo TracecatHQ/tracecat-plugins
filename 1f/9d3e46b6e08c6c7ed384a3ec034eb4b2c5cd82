@@ -1,0 +1,19 @@
+plugins/tracecat/skills/tracecat-automation-best-practices/references/workflow-editing.md
+  s_8ecead489e7107::t_7d5adec769e652 26-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1f9d3e46b6e08c6c7ed384a3ec034eb4b2c5cd82",
+  "prompts": {},
+  "sessions": {
+    "s_8ecead489e7107": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0eecd-82a4-7bd2-8ea9-cf7025671d54",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
