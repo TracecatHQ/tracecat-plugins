@@ -26,6 +26,10 @@ Use Tracecat's remote MCP server as the control plane. Discover current workspac
 ## Operating rules
 
 - Treat UUIDs, slugs, aliases, and refs as distinct identifiers. Obtain the exact identifier accepted by the next tool.
+- Before writing an integration or API step, search `list_actions` with a short product name or
+  known namespace. Follow `next_cursor` when needed and inspect candidates with
+  `get_action_context`. Use a matching `tools.*` action first; use `core.http_*` only when none
+  fits, and do not make external API calls from `core.script.run_python`.
 - Prefer focused patch/edit tools over full replacement for existing objects.
 - On a revision conflict, re-read current state and reconcile; do not retry blindly with the new revision.
 - Keep drafts and published versions distinct. Publishing or running can affect other users and systems, so do it only when requested or clearly required by the task.
