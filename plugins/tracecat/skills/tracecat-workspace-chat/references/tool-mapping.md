@@ -11,13 +11,13 @@ complete argument shapes.
   registry action.
 - `tracecat://platform/dsl-reference`: unavailable. Search `references/docs/` locally, using
   `references/docs/docs.json` as the navigation index.
-- `list_actions`: use `core.workflow.list_actions` with a literal product or action-name
+- `list_actions`: use `core.registry.search_actions` with a literal product or action-name
   substring. Follow `next_cursor` with the same filters while `has_more` is true when the
   first page lacks a suitable action. Browse a known namespace with `namespace=...`.
 - `get_action_context` and `get_workflow_authoring_context`: use
   `core.workflow.get_authoring_context` with `action_names=[...]` after discovery; do not wrap
   `action_names` in an `actions` object. Its `query` mode returns at most 20 full action
-  contexts without a cursor, so use `core.workflow.list_actions` for broad discovery.
+  contexts without a cursor, so use `core.registry.search_actions` for broad discovery.
 - `list_workflows`: unavailable in the default Workspace Chat surface. Use a workflow ID supplied
   by the conversation or current entity context; do not invent or enumerate one.
 
