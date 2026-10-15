@@ -66,6 +66,25 @@ linear over parallel, and readable over fully connected: **fewer edges is the me
 See [graph-shape](references/graph-shape.md) for a worked over-connected rewrite, join
 strategies, error edges, and why scatter is not branching.
 
+## Action priority
+
+Pick the most specific action that does the job:
+
+1. **Integration actions** (`tools.<integration_slug>.*`) for the product being called. Search
+   `list_actions` with a short product or action-name substring (for example `query="okta"`),
+   or browse a known `tools.<integration_slug>` namespace, before writing an API call. Search
+   matches literal substrings, not separate keywords. Follow `next_cursor` while `has_more` is
+   true when the first page lacks a suitable action. Inspect candidates with
+   `get_action_context` and compare their required credentials and arguments.
+2. **Core actions**: `core.http_request` / `core.http_paginate` for products or endpoints with
+   no integration action, `core.transform.*` for shaping, and `core.table.*` / `core.cases.*`
+   for platform data.
+3. **`core.script.run_python`** only for a self-contained step that no action covers. Never call
+   an API from Python when an integration or HTTP action can make the call.
+
+Never invent `tools.*` names. If a generic request fits several integrations, show the
+candidates first.
+
 ## Choosing between an agent and Python
 
 Decide by the *kind* of work, and optimize the whole workflow for maintainability and
@@ -77,9 +96,10 @@ readability — **the fewest actions and the least code that does the job.**
   `metadata.tools`, then trust the agent with them. Prefer agents, prompts, and skills — they
   carry the creative thinking with far fewer moving parts than a graph of deterministic nodes.
 - **Deterministic data plumbing → use Python** (`core.script.run_python`). Transforming,
-  normalizing, redacting, loading or upserting rows into tables, forwarding data between
-  systems. This is exactly what Python is for — it is **not** a smell. One clear `run_python`
-  action beats scattering the same work across many nodes.
+  normalizing, redacting, joining, and batching rows into tables. This is exactly what Python
+  is for — it is **not** a smell. One clear `run_python` action beats scattering the same work
+  across many nodes. API calls are not data plumbing: they go in integration or `core.http_*`
+  actions (see [Action priority](#action-priority)).
 
 The smell is using Python for the *agentic* part — for example composing or sending an
 agent's Slack message from a script instead of giving the agent the Slack tool.
@@ -146,8 +166,9 @@ helper to compensate for a presumed limitation — see
 - For agentic workflows, push most behavior into the agent prompt/preset. For event-driven
   workflows, a single reshape/redact/upsert action before the agent is usually the right
   deterministic boundary.
-- Use `ai.agent` / `ai.preset_agent` for the agentic work; `core.http_request` for
-  deterministic API calls; `core.script.run_python` for deterministic data work, once an inline
+- Use `ai.agent` / `ai.preset_agent` for the agentic work; the product's `tools.*` action (or
+  `core.http_request` when none exists) for deterministic API calls; `core.script.run_python`
+  for deterministic data work, once an inline
   expression, `run_if`, or a `core.transform.*` action has been ruled out — see
   [expressions](references/expressions-and-conditions.md) and
   [run-python](references/run-python.md).
@@ -183,6 +204,9 @@ helper to compensate for a presumed limitation — see
   manage workflows, and action names such as `core.http_request` only inside workflow YAML.
 - Inventing `tools.*` action names. Discover actions with `list_actions`, then inspect exact
   schemas with `get_action_context`.
+- Calling a product's API from `core.script.run_python` (`requests`, `httpx`) or a bare
+  `core.http_request` when a suitable `tools.*` action exists. Search and page through
+  `list_actions` for the product first.
 - Using `for_each` for ordinary loop management, or using scatter/gather for data-heavy
   batching, filtering, joins, or table writes. Default to scatter for workflow-level loops;
   add gather only when downstream steps need combined results, and omit it otherwise. Be especially

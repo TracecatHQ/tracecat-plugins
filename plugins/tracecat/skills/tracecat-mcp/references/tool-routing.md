@@ -8,7 +8,7 @@ Load the smallest tool family that satisfies the request.
 | Find or inspect workflows | `list_workflows`, `get_workflow` | Use `edit_workflow` for focused changes |
 | Author workflow actions | `get_workflow_authoring_context` | `validate_workflow` before publish or run |
 | Add or edit `run_if`, `depends_on`, or joins | `get_workflow_graph` | Read each action's `gated_by` before writing a condition |
-| Discover an integration action | `list_actions`, `get_action_context` | Use the returned schema exactly |
+| Discover an integration action | `list_actions`, `get_action_context` | Search by product or namespace, follow `next_cursor`, and inspect credentials and schema before choosing `tools.*` over generic HTTP |
 | Debug a workflow run | `list_workflow_executions` | `get_workflow_execution` for structured failure details |
 | Manage webhook or case triggers | `get_webhook`, `get_case_trigger` | Use the matching update tool after reading current state |
 | Manage tables or rows | `list_tables`, `get_table` | Prefer batch row tools for multiple rows |
@@ -28,4 +28,4 @@ Load the smallest tool family that satisfies the request.
 
 ## Pagination
 
-List/search tools return `items`, `next_cursor`, `prev_cursor`, `has_more`, and `has_previous`. Continue with `next_cursor` when a unique match was not found on the current page. Do not interpret absence from page one as absence from the workspace.
+List/search tools return `items`, `next_cursor`, `prev_cursor`, `has_more`, and `has_previous`. Continue with `next_cursor` when a suitable match was not found on the current page. Do not interpret absence from page one as absence from the workspace. `list_actions(query=...)` matches a literal substring, so search a short product or action-name fragment rather than a multi-word request; use `namespace` when the integration slug is known.

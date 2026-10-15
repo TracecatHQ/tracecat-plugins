@@ -1,9 +1,10 @@
 # Run-Python and deterministic data work
 
 Use `core.script.run_python` for deterministic data plumbing: transforming, normalizing,
-redacting, loading/upserting table rows, forwarding data, batching, retries, joins, sorting,
-simple dedupe guards, and per-item error handling. Consolidate this work into one clear action
-rather than scattering it across many nodes.
+redacting, loading/upserting table rows, batching, joins, sorting, simple dedupe guards, and
+per-item error handling. Consolidate this work into one clear action rather than scattering it
+across many nodes. API calls belong in the product's `tools.*` integration action, or
+`core.http_request` / `core.http_paginate` when none exists — not in a script.
 
 ## Loops and concurrency
 
@@ -13,15 +14,13 @@ rather than scattering it across many nodes.
   combined results; omit gather otherwise.
 - Use best judgment: choose `core.script.run_python` for data-heavy in-process loops such as
   transforms, batching, joins, dedupe, sorting, grouping, chunked table writes, batch table
-  uploads, bounded async HTTP loops, and per-item error handling where separate workflow
-  streams are unnecessary.
+  uploads, and per-item error handling where separate workflow streams are unnecessary.
 - Avoid action-level `for_each` by default. Use it only for known, bounded lists when the user
   explicitly needs separate workflow action runs per item and accepts the scheduler/concurrency
   tradeoff.
 - Use `core.loop.start` / `core.loop.end` only when each iteration depends on prior action
   output.
-- Use bounded async concurrency inside `core.script.run_python` for bulk HTTP or table
-  operations.
+- Use bounded async concurrency inside `core.script.run_python` for bulk table operations.
 - Avoid `scatter -> gather` for high-fanout table/case writes. Scatter is useful, but >10
   concurrent DB-backed branches can exhaust Postgres connection slots. Scatter's optional
   `interval` can stagger stream creation, but it is not a database batch/throttle primitive; do
@@ -92,11 +91,10 @@ Set the run-python action's `allow_network: true` when imported helpers call Tra
 
 ## Imports
 
-Use direct Tracecat imports inside `core.script.run_python` when consolidating table or HTTP
-side effects reduces graph noise:
+Use direct Tracecat imports inside `core.script.run_python` when consolidating table side
+effects reduces graph noise:
 
 ```python
-from tracecat_registry.core.http import http_request, http_paginate
 from tracecat_registry.core.table import create_table, insert_rows, lookup, update_row
 
 async def main(rows):
@@ -126,10 +124,12 @@ counts, and bounded error samples — not full intermediate datasets.
 
 ## HTTP and pagination
 
-- Prefer `core.http_request` for single generic API calls and `core.http_paginate` for cursor
-  or next-URL APIs when the items and next request can be expressed clearly. Move the work
-  into `core.script.run_python` when pagination, joins, retries, dedupe, or per-item error
-  handling would make the graph noisy.
+- Use the product's `tools.*` integration action when one exists; search `list_actions` for
+  the product first. Otherwise use `core.http_request` for single calls and
+  `core.http_paginate` for cursor or next-URL APIs.
+- Keep the API calls in those actions and do joins, dedupe, or per-item shaping of their
+  results in `core.transform.*` or `core.script.run_python` afterwards. Do not rewrite an
+  available action as `requests`/`httpx` calls in a script.
 - Check `get_workflow_authoring_context` before using `core.http_paginate`; its pagination
   controls are lambda-string fields (`stop_condition`, `next_request`), not nested request
   objects.
