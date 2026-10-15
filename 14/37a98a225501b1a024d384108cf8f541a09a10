@@ -1,0 +1,25 @@
+plugins/tracecat/skills/tracecat-mcp/references/tool-routing.md
+  s_3fab07a328f4d4::t_eb51c505265287 11,31
+plugins/tracecat/skills/tracecat-automation-best-practices/SKILL.md
+  s_3fab07a328f4d4::t_eb51c505265287 69-87,99-102,169-171,207-209
+plugins/tracecat/skills/tracecat-workspace-chat/references/tool-mapping.md
+  s_3fab07a328f4d4::t_eb51c505265287 16-19
+plugins/tracecat/skills/tracecat-automation-best-practices/references/run-python.md
+  s_3fab07a328f4d4::t_5332dd79163856 4-7,17,23,94-95,127-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1437a98a225501b1a024d384108cf8f541a09a10",
+  "prompts": {},
+  "sessions": {
+    "s_3fab07a328f4d4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a140d1-98e7-7b53-9710-5c426d6d882a",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Chris Lo <46541035+topher-lo@users.noreply.github.com>"
+    }
+  }
+}
