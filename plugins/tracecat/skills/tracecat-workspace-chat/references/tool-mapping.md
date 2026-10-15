@@ -13,7 +13,10 @@ complete argument shapes.
   `references/docs/docs.json` as the navigation index.
 - `list_actions`, `get_action_context`, and `get_workflow_authoring_context`: use
   `core.workflow.get_authoring_context`. Pass either `action_names=[...]` or `query=...`; do not
-  wrap `action_names` in an `actions` object.
+  wrap `action_names` in an `actions` object. Its query is a literal substring and returns at
+  most 20 action contexts without a cursor. Refine broad product searches with a narrower
+  name fragment; use `action_names` once the exact name is known. A full first response does
+  not establish that a matching action is absent.
 - `list_workflows`: unavailable in the default Workspace Chat surface. Use a workflow ID supplied
   by the conversation or current entity context; do not invent or enumerate one.
 
