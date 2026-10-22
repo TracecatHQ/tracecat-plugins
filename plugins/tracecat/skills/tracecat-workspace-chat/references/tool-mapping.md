@@ -59,6 +59,17 @@ through workflow JSON Patch.
 - Use the available `core.table.*` and `core.cases.*` action names exactly as exposed. Preserve
   read-before-write and pagination rules from the generic skill, but omit workspace IDs.
 
+## Forms
+
+- `list_forms`, `get_form`, and `update_form` map to `core.forms.list_forms`,
+  `core.forms.get_form`, and `core.forms.update_form`. They are exposed only when the
+  organization has Forms; without them, say Forms is unavailable rather than imitating one.
+- `core.forms.update_form` takes `workflow_id`, not the form ID, and creates the form when the
+  workflow has none. Its `config` replaces the stored config: call `core.forms.get_form` first
+  and send the whole edited config. See [Forms](forms.md) for the config shape and flow.
+- Form config is not part of the workflow definition. Change inputs with
+  `core.workflow.edit_workflow`, and layout, labels, and widgets with `core.forms.update_form`.
+
 ## Agent presets and integrations
 
 - Preset create/get/list/update operations map to `ai.agent.create_preset`,

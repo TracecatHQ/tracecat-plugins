@@ -1,6 +1,6 @@
 ---
 name: tracecat-workspace-chat
-description: Use whenever Tracecat Workspace Chat answers platform questions or operates workflows, cases, tables, agent presets, integrations, secrets, variables, or other workspace features. Adapts generic Tracecat MCP guidance to the tools actually exposed in Workspace Chat and routes platform facts to bundled local docs. Do not use for external Tracecat MCP connections or Tracecat source-code development.
+description: Use whenever Tracecat Workspace Chat answers platform questions or operates workflows, forms, cases, tables, agent presets, integrations, secrets, variables, or other workspace features. Adapts generic Tracecat MCP guidance to the tools actually exposed in Workspace Chat and routes platform facts to bundled local docs. Do not use for external Tracecat MCP connections or Tracecat source-code development.
 ---
 
 # Tracecat Workspace Chat
@@ -25,6 +25,7 @@ external Tracecat MCP surface one-for-one.
    `$tracecat-automation-best-practices` after applying this adapter's tool map. Use that skill's
    domain practices, but ignore its external-MCP control-plane tool names.
 4. For Slack-facing automations, also use `$tracecat-slackbot-best-practices`.
+5. For forms, read [Forms](references/forms.md) before reading or changing a form config.
 
 ## Operating rules
 
