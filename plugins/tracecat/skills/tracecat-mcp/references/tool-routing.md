@@ -11,6 +11,7 @@ Load the smallest tool family that satisfies the request.
 | Discover an integration action | `list_actions`, `get_action_context` | Search by product or namespace, follow `next_cursor`, and inspect credentials and schema before choosing `tools.*` over generic HTTP |
 | Debug a workflow run | `list_workflow_executions` | `get_workflow_execution` for structured failure details |
 | Manage webhook or case triggers | `get_webhook`, `get_case_trigger` | Use the matching update tool after reading current state |
+| Build or edit a workflow form | `list_forms`, `get_form` | `update_form` replaces the whole config; read first, and add missing inputs to the workflow before referencing them |
 | Manage tables or rows | `list_tables`, `get_table` | Prefer batch row tools for multiple rows |
 | Manage cases, tags, fields, or dropdowns | The matching `list_*` tool | Resolve definition IDs before associations or values |
 | Inspect variables or secrets | `list_variables`, `list_secrets_metadata` | Work with metadata only; never request secret values |
